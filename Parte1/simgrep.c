@@ -37,6 +37,16 @@ void sigint_handler (int signo)
 
 }
 
+//int checkLineLength (FILE * file) //TODO
+//	int counter = 0;
+//
+//	while (fgetc(file) != '\n')
+//	{
+//		counter++;
+//	}
+//
+//}
+
 int checkWord (char* word)
 {
 	if (strcmp (word, pattern) == 0)
@@ -63,6 +73,8 @@ void search (char * fileName)
 		printf ("Wasn't able to open %s.\n", fileName);
 	}
 
+	int wordCounter = 0;
+	int lineNumber = 1;
 
 	while (fgets(line, sizeof(line), file))
 	{
@@ -74,12 +86,18 @@ void search (char * fileName)
 		while (words != NULL) {
 
 			if (checkWord (words))
+			{
 				Found = 1;
+				wordCounter++;
+			}
+
 			words = strtok(NULL, " ,.-"); // goes to next word
 		}
 
+		lineNumber++;
+
 		if (Found == 1)
-			printf ("%s\n\n", line);
+			printf ("%d %s\n",lineNumber, line);
 	}
 
 }
