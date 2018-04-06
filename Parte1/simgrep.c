@@ -2,7 +2,14 @@
 #include <stdio.h> //printf
 #include <stdlib.h> //exit
 #include <unistd.h> //sleep
+#include <string.h> //strcmp
 
+int ignore = 0;
+int fileName = 0;
+int numbLines = 0;
+int count = 0;
+int completeWord = 0;
+int allFiles = 0;
 
 void sigint_handler (int signo)
 {
@@ -26,7 +33,7 @@ void sigint_handler (int signo)
 
 }
 
-int main()
+int main(int argc, char *argv[])
 {
 	struct sigaction action;
 	action.sa_handler = sigint_handler;
@@ -39,10 +46,52 @@ int main()
 		exit (0);
 	}
 
-	while (1)
+	int i = 1;
+
+	for (i; i < argc; i++)
 	{
-		printf ("On infinite loop\n");
-		sleep (1);
+		if (strcmp (argv[i], "-i") == 0)
+		{
+			ignore = 1;
+			continue;
+		}
+
+		else if (strcmp (argv[i], "-l") == 0)
+		{
+			fileName = 1;
+			continue;
+		}
+
+		else if (strcmp (argv[i], "-n") == 0)
+		{
+			numberLines = 1;
+			continue;
+		}
+
+		else if (strcmp (argv[i], "-c") == 0)
+		{
+			count = 1;
+			continue;
+		}
+
+		else if (strcmp (argv[i], "-w") == 0)
+		{
+			completeWord = 1;
+			continue;
+		}
+
+		else if (strcmp (argv[i], "-r") == 0)
+		{
+			allFiles = 1;
+			continue;
+		}
+
+		else
+		{
+			printf ("%s is not a valid option.\n", argv[i]);
+			printf ("The program will now exit.\n");
+			exit(0);
+		}
 	}
 
 	exit(0);
