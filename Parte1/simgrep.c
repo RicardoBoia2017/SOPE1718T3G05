@@ -3,9 +3,10 @@
 #include <stdlib.h> //exit
 #include <unistd.h> //sleep
 #include <string.h> //strcmp
+#include <fcntl.h> // open
 
 int ignore = 0;
-int fileName = 0;
+int fileNames = 0;
 int numberLines = 0;
 int count = 0;
 int completeWord = 0;
@@ -26,15 +27,42 @@ void sigint_handler (int signo)
 
 	else
 	{
-		printf ("Invalid input! Try again.\n");
+		printf ("\nInvalid input! Try again.\n");
 		sigint_handler(signo);
 		return;
 	}
 
 }
 
+void search (char * fileName)
+{
+	char line [100];
+	size_t read;
+
+
+	FILE* file = fopen (fileName, "r");
+
+	if (file < 0)
+	{
+		printf ("Wasn't able to open %s.\n", fileName);
+	}
+
+
+	while (fgets(line, sizeof(line), file))
+	{
+		printf ("%s\n", line);
+	}
+
+}
+
 int main(int argc, char *argv[])
 {
+	if (argc < 3)
+	{
+		printf ("Invalid number of arguments.\n");
+		exit(1);
+	}
+
 	struct sigaction action;
 	action.sa_handler = sigint_handler;
 	sigemptyset(& (action.sa_mask));
@@ -46,9 +74,11 @@ int main(int argc, char *argv[])
 		exit (0);
 	}
 
+	char * fileName = argv[argc-1];
+
 	int i = 1;
 
-	for (i; i < argc; i++)
+	for (i; i < argc - 2; i++)
 	{
 		if (strcmp (argv[i], "-i") == 0)
 		{
@@ -58,7 +88,7 @@ int main(int argc, char *argv[])
 
 		else if (strcmp (argv[i], "-l") == 0)
 		{
-			fileName = 1;
+			fileNames = 1;
 			continue;
 		}
 
@@ -90,9 +120,11 @@ int main(int argc, char *argv[])
 		{
 			printf ("%s is not a valid option.\n", argv[i]);
 			printf ("The program will now exit.\n");
-			exit(0);
+			exit(1);
 		}
 	}
+
+	search(fileName);
 
 	exit(0);
 }
