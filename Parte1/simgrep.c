@@ -6,11 +6,14 @@
 #include <fcntl.h> // open
 
 int ignore = 0;
-int fileNames = 0;
+int displayFileNames = 0;
 int numberLines = 0;
 int count = 0;
 int completeWord = 0;
 int allFiles = 0;
+
+char* pattern;
+char* fileName;
 
 void sigint_handler (int signo)
 {
@@ -34,6 +37,19 @@ void sigint_handler (int signo)
 
 }
 
+int checkWord (char* word)
+{
+	if (strcmp (word, pattern) == 0)
+		return 1;
+
+	else if (strstr(word,pattern) != NULL)
+	{
+		return 1;
+	}
+
+	return 0;
+}
+
 void search (char * fileName)
 {
 	char line [100];
@@ -50,7 +66,20 @@ void search (char * fileName)
 
 	while (fgets(line, sizeof(line), file))
 	{
-		printf ("%s\n", line);
+		char tmp [100];
+		strcpy (tmp,line);
+		char *words = strtok (tmp," ,.-");
+		int Found = 0;
+
+		while (words != NULL) {
+
+			if (checkWord (words))
+				Found = 1;
+			words = strtok(NULL, " ,.-"); // goes to next word
+		}
+
+		if (Found == 1)
+			printf ("%s\n\n", line);
 	}
 
 }
@@ -74,6 +103,7 @@ int main(int argc, char *argv[])
 		exit (0);
 	}
 
+	pattern = argv [argc-2];
 	char * fileName = argv[argc-1];
 
 	int i = 1;
@@ -88,7 +118,7 @@ int main(int argc, char *argv[])
 
 		else if (strcmp (argv[i], "-l") == 0)
 		{
-			fileNames = 1;
+			displayFileNames = 1;
 			continue;
 		}
 
