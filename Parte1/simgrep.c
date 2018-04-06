@@ -6,7 +6,7 @@
 
 int ignore = 0;
 int fileName = 0;
-int numbLines = 0;
+int numberLines = 0;
 int count = 0;
 int completeWord = 0;
 int allFiles = 0;
