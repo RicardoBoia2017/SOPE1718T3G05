@@ -5,15 +5,15 @@
 #include <string.h> //strcmp
 #include <fcntl.h> // open
 
-int ignore = 0;
-int displayFileNames = 0;
-int numberLines = 0;
-int count = 0;
-int completeWord = 0;
-int allFiles = 0;
+int ignore = 0; //ignores if letter is upper or lower case.
+int displayFileNames = 0; //displays names of files that have that pattern
+int numberLines = 0; // displays the number of the line before it prints the line
+int count = 0; //displays the number of lines in which the pattern is found
+int completeWord = 0; //the pattern must form a complete word
+int allFiles = 0; //searchs in all files and sub-directories
 
-char* pattern;
-char* fileName;
+char* pattern; //word we are looking for
+char* fileName; //name of the file where we are looking
 
 void sigint_handler (int signo)
 {
@@ -37,7 +37,7 @@ void sigint_handler (int signo)
 
 }
 
-//int checkLineLength (FILE * file) //TODO
+//int checkLineLength (FILE * file)
 //	int counter = 0;
 //
 //	while (fgetc(file) != '\n')
@@ -49,10 +49,10 @@ void sigint_handler (int signo)
 
 int checkWord (char* word)
 {
-	if (strcmp (word, pattern) == 0)
+	if (strcmpi (word, pattern) == 0) //Only returns 1 when the pattern forms a full word
 		return 1;
 
-	else if (strstr(word,pattern) != NULL)
+	else if (completeWord == 0 && strstr(word,pattern) != NULL) //checks if pattern is a subset of a word
 	{
 		return 1;
 	}
@@ -60,28 +60,38 @@ int checkWord (char* word)
 	return 0;
 }
 
+void printLine (char * line, int lineNumber)
+{
+	if (numberLines)
+		printf ("#%d - ", lineNumber);
+
+	printf ("%s\n", line);
+}
+
 void search (char * fileName)
 {
-	char line [100];
+	char * line = (char*)malloc(500);;
 	size_t read;
 
 
 	FILE* file = fopen (fileName, "r");
 
-	if (file < 0)
+	if (file == 0)
 	{
 		printf ("Wasn't able to open %s.\n", fileName);
 	}
 
 	int wordCounter = 0;
 	int lineNumber = 1;
+	int Found = 0;
+	char *words;
 
-	while (fgets(line, sizeof(line), file))
+	while (fgets(line, 200, file))
 	{
-		char tmp [100];
+		char tmp [200];
 		strcpy (tmp,line);
-		char *words = strtok (tmp," ,.-");
-		int Found = 0;
+		words = strtok (tmp," ,.-");
+		Found = 0;
 
 		while (words != NULL) {
 
@@ -97,7 +107,9 @@ void search (char * fileName)
 		lineNumber++;
 
 		if (Found == 1)
-			printf ("%d %s\n",lineNumber, line);
+		{
+			printLine(line, lineNumber);
+		}
 	}
 
 }
