@@ -8,12 +8,31 @@
 int ignore = 0; //ignores if letter is upper or lower case.
 int displayFileNames = 0; //displays names of files that have that pattern
 int numberLines = 0; // displays the number of the line before it prints the line
-int count = 0; //displays the number of lines in which the pattern is found
+int lineCounter = 0; //displays the number of lines in which the pattern is found
 int completeWord = 0; //the pattern must form a complete word
 int allFiles = 0; //searchs in all files and sub-directories
 
 char* pattern; //word we are looking for
 char* fileName; //name of the file where we are looking
+int counter = 0; //counter number of lines that have pattern.
+
+int registerFileDesc;
+
+void openRegisterFile (char * registerFileName)
+{
+	registerFileDesc = open (registerFileName,O_WRONLY|O_CREAT|O_APPEND,0644);
+
+	if (registerFileDesc == -1)
+	{
+		printf ("There was an error opening the register file.\n");
+		exit(1);
+	}
+}
+
+void writeToRegisterFile (char* string, int pid)
+{
+	write (registerFileDesc, string, strlen(string) );
+}
 
 void sigint_handler (int signo)
 {
@@ -37,25 +56,30 @@ void sigint_handler (int signo)
 
 }
 
-//int checkLineLength (FILE * file)
-//	int counter = 0;
-//
-//	while (fgetc(file) != '\n')
-//	{
-//		counter++;
-//	}
-//
-//}
+int checkLineLength (FILE * file)
+{
+	int charCounter = 0;
+
+	while (fgetc(file) != '\n')
+	{
+		charCounter++;
+	}
+
+//	printf ("%d\n", charCounter);
+
+	return charCounter;
+}
 
 int checkWord (char* word)
 {
-	if (strcmpi (word, pattern) == 0) //Only returns 1 when the pattern forms a full word
+	if (strcmp (word, pattern) == 0) //Only returns 1 when the pattern forms a full word
+		return 1;
+
+	else if (ignore == 1 && strcasecmp (word,pattern) == 0) // ignores if letter is in upper case or lower case
 		return 1;
 
 	else if (completeWord == 0 && strstr(word,pattern) != NULL) //checks if pattern is a subset of a word
-	{
 		return 1;
-	}
 
 	return 0;
 }
@@ -70,15 +94,14 @@ void printLine (char * line, int lineNumber)
 
 void search (char * fileName)
 {
-	char * line = (char*)malloc(500);;
-	size_t read;
-
+	char * line = (char*)malloc(700);
 
 	FILE* file = fopen (fileName, "r");
 
 	if (file == 0)
 	{
 		printf ("Wasn't able to open %s.\n", fileName);
+		exit(0);
 	}
 
 	int wordCounter = 0;
@@ -86,11 +109,15 @@ void search (char * fileName)
 	int Found = 0;
 	char *words;
 
-	while (fgets(line, 200, file))
+//	int lineLength = checkLineLength(file);
+
+	while (fgets(line, 300, file) != NULL)
 	{
-		char tmp [200];
+		char tmp [300];
 		strcpy (tmp,line);
-		words = strtok (tmp," ,.-");
+
+
+		words = strtok (tmp," ,.-\"");
 		Found = 0;
 
 		while (words != NULL) {
@@ -104,23 +131,36 @@ void search (char * fileName)
 			words = strtok(NULL, " ,.-"); // goes to next word
 		}
 
-		lineNumber++;
-
 		if (Found == 1)
 		{
 			printLine(line, lineNumber);
+			counter ++;
 		}
+
+		lineNumber++;
+//		lineLength = checkLineLength (file);
 	}
 
 }
 
-int main(int argc, char *argv[])
+int main(int argc, char *argv[], char* envp[])
 {
 	if (argc < 3)
 	{
 		printf ("Invalid number of arguments.\n");
 		exit(1);
 	}
+
+	char * name = getenv("LOGFILENAME");
+
+	if (name == NULL) // if it doesn't found environment variable
+	{
+		printf ("Environment variable LOGFILENAME wasn't found.\n");
+		exit (1);
+	}
+
+	openRegisterFile(name);
+
 
 	struct sigaction action;
 	action.sa_handler = sigint_handler;
@@ -160,7 +200,7 @@ int main(int argc, char *argv[])
 
 		else if (strcmp (argv[i], "-c") == 0)
 		{
-			count = 1;
+			lineCounter = 1;
 			continue;
 		}
 
@@ -186,5 +226,9 @@ int main(int argc, char *argv[])
 
 	search(fileName);
 
+	if (lineCounter == 1)
+		printf ("\nThe word was found in %d lines.\n", counter);
+
 	exit(0);
+
 }
