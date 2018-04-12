@@ -4,6 +4,9 @@
 #include <unistd.h> //sleep
 #include <string.h> //strcmp
 #include <fcntl.h> // open
+#include <dirent.h> //DIR
+#include <sys/stat.h> //lstat
+#include <sys/wait.h> //wait
 
 int ignore = 0; //ignores if letter is upper or lower case.
 int displayFileNames = 0; //displays names of files that have that pattern
@@ -92,7 +95,7 @@ void printLine (char * line, int lineNumber)
 	printf ("%s\n", line);
 }
 
-void search (char * fileName)
+void searchFile (char * fileName)
 {
 	char * line = (char*)malloc(700);
 
@@ -100,11 +103,10 @@ void search (char * fileName)
 
 	if (file == 0)
 	{
-		printf ("Wasn't able to open %s.\n", fileName);
+		printf ("Wasn't able to open file %s.\n", fileName);
 		exit(0);
 	}
 
-	int wordCounter = 0;
 	int lineNumber = 1;
 	int Found = 0;
 	char *words;
@@ -123,10 +125,7 @@ void search (char * fileName)
 		while (words != NULL) {
 
 			if (checkWord (words))
-			{
 				Found = 1;
-				wordCounter++;
-			}
 
 			words = strtok(NULL, " ,.-"); // goes to next word
 		}
@@ -141,6 +140,50 @@ void search (char * fileName)
 //		lineLength = checkLineLength (file);
 	}
 
+}
+
+void searchDirs (const char * dirName)
+{
+	 DIR *dir;
+	 struct dirent *direntp;
+	 struct stat stat_buf;
+	 char name [200];
+	 int status;
+
+	 int pid = fork ();
+
+	 if (pid > 0) //parent process
+	 {
+		 wait(&status);
+	 }
+
+	 else if (pid == 0) //child process
+	 {
+		 if ((dir = opendir(dirName)) == NULL)
+		 {
+			 printf ("Wasn't able to open directory %s.\n", dirName);
+			 exit(1);
+		 }
+
+		 while ((direntp = readdir (dir)) != NULL)
+		 {
+			printf ("%s\n", dirName);
+
+			if(lstat(name, &stat_buf) == -1)
+			{
+				perror("Error: lstat");
+				exit(1);
+			}
+
+			if (S_ISREG(stat_buf.st_mode))
+				searchFile (direntp->d_name);
+
+			else if (S_ISDIR (stat_buf.st_mode))
+				searchDirs (direntp->d_name);
+			else
+				continue;
+		 }
+	 }
 }
 
 int main(int argc, char *argv[], char* envp[])
@@ -224,7 +267,10 @@ int main(int argc, char *argv[], char* envp[])
 		}
 	}
 
-	search(fileName);
+	if (allFiles)
+		searchDirs (fileName);
+	else
+		searchFile(fileName);
 
 	if (lineCounter == 1)
 		printf ("\nThe word was found in %d lines.\n", counter);
