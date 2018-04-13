@@ -167,7 +167,8 @@ void searchDirs (const char * dirName)
 
 		 while ((direntp = readdir (dir)) != NULL)
 		 {
-			printf ("%s\n", dirName);
+			sprintf(name,"%s/%s",dirName,direntp->d_name);
+			printf ("%s\n",name);
 
 			if(lstat(name, &stat_buf) == -1)
 			{
@@ -176,7 +177,9 @@ void searchDirs (const char * dirName)
 			}
 
 			if (S_ISREG(stat_buf.st_mode))
+			{
 				searchFile (direntp->d_name);
+			}
 
 			else if (S_ISDIR (stat_buf.st_mode))
 				searchDirs (direntp->d_name);
