@@ -19,13 +19,13 @@ char* pattern; //word we are looking for
 char* fileName; //name of the file where we are looking
 int counter = 0; //counter number of lines that have pattern.
 
-int registerFileDesc;
+FILE * registerFilePointer;
 
 void openRegisterFile (char * registerFileName)
 {
-	registerFileDesc = open (registerFileName,O_WRONLY|O_CREAT|O_APPEND,0644);
+	registerFilePointer = fopen (registerFileName, "a"); //O_WRONLY|O_CREAT|O_APPEND
 
-	if (registerFileDesc == -1)
+	if (registerFilePointer == 0)
 	{
 		printf ("There was an error opening the register file.\n");
 		exit(1);
@@ -34,7 +34,7 @@ void openRegisterFile (char * registerFileName)
 
 void writeToRegisterFile (char* string, int pid)
 {
-	write (registerFileDesc, string, strlen(string) );
+	fprintf (registerFilePointer, "%s %8i \n", string, pid);
 }
 
 void sigint_handler (int signo)
@@ -57,20 +57,6 @@ void sigint_handler (int signo)
 		return;
 	}
 
-}
-
-int checkLineLength (FILE * file)
-{
-	int charCounter = 0;
-
-	while (fgetc(file) != '\n')
-	{
-		charCounter++;
-	}
-
-//	printf ("%d\n", charCounter);
-
-	return charCounter;
 }
 
 int checkWord (char* word)
@@ -97,7 +83,9 @@ void printLine (char * line, int lineNumber)
 
 void searchFile (char * fileName)
 {
-	char * line = (char*)malloc(700);
+	char * line = NULL;
+	size_t lineLength;
+	int charRead;
 
 	FILE* file = fopen (fileName, "r");
 
@@ -111,11 +99,10 @@ void searchFile (char * fileName)
 	int Found = 0;
 	char *words;
 
-//	int lineLength = checkLineLength(file);
 
-	while (fgets(line, 300, file) != NULL)
+	while ( (charRead = getline(&line, &lineLength, file)) != -1)
 	{
-		char tmp [300];
+		char * tmp = malloc(charRead);
 		strcpy (tmp,line);
 
 
@@ -137,7 +124,6 @@ void searchFile (char * fileName)
 		}
 
 		lineNumber++;
-//		lineLength = checkLineLength (file);
 	}
 
 }
@@ -207,6 +193,7 @@ int main(int argc, char *argv[], char* envp[])
 
 	openRegisterFile(name);
 
+	writeToRegisterFile ("COMANDO ", getpid());
 
 	struct sigaction action;
 	action.sa_handler = sigint_handler;
