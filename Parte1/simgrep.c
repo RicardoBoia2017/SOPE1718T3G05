@@ -7,6 +7,8 @@
 #include <dirent.h> //DIR
 #include <sys/stat.h> //lstat
 #include <sys/wait.h> //wait
+#include <sys/time.h> //gettimeofday
+
 
 int ignore = 0; //ignores if letter is upper or lower case.
 int displayFileNames = 0; //displays names of files that have that pattern
@@ -19,8 +21,10 @@ char* pattern; //word we are looking for
 char* fileName; //name of the file where we are looking
 int counter = 0; //counter number of lines that have pattern.
 
-FILE * registerFilePointer;
+FILE * registerFilePointer; //pointer for the registers file
+struct timeval startTime; //start time of program
 
+//opens register file
 void openRegisterFile (char * registerFileName)
 {
 	registerFilePointer = fopen (registerFileName, "a"); //O_WRONLY|O_CREAT|O_APPEND
@@ -32,11 +36,20 @@ void openRegisterFile (char * registerFileName)
 	}
 }
 
+//writes to register file in format inst – pid – act
 void writeToRegisterFile (char* string, int pid)
 {
-	fprintf (registerFilePointer, "%s %8i \n", string, pid);
+	struct timeval time;
+	gettimeofday(&time,NULL);
+
+	suseconds_t currentInstant = time.tv_usec - startTime.tv_usec;
+
+	double currentInstant_double = ((double)currentInstant/1000); // convert from Microseconds to milisseconds
+
+	fprintf (registerFilePointer, "%.2f %8i %s", currentInstant_double, pid, string	);
 }
 
+//SIGINT handler
 void sigint_handler (int signo)
 {
 	char input;
@@ -59,6 +72,7 @@ void sigint_handler (int signo)
 
 }
 
+//checks if the word is what we are looking for, according to -i and -w options
 int checkWord (char* word)
 {
 	if (strcmp (word, pattern) == 0) //Only returns 1 when the pattern forms a full word
@@ -73,6 +87,7 @@ int checkWord (char* word)
 	return 0;
 }
 
+//prints line with or without its number, according to -c
 void printLine (char * line, int lineNumber)
 {
 	if (numberLines)
@@ -81,13 +96,18 @@ void printLine (char * line, int lineNumber)
 	printf ("%s\n", line);
 }
 
+//file search
 void searchFile (char * fileName)
 {
 	char * line = NULL;
 	size_t lineLength;
-	int charRead;
+	int charsRead;
 
 	FILE* file = fopen (fileName, "r");
+
+	char string [8 + strlen(fileName)];
+	sprintf(string,"ABERTO %s\n",fileName);
+	writeToRegisterFile (string, getpid());
 
 	if (file == 0)
 	{
@@ -100,9 +120,9 @@ void searchFile (char * fileName)
 	char *words;
 
 
-	while ( (charRead = getline(&line, &lineLength, file)) != -1)
+	while ( (charsRead = getline(&line, &lineLength, file)) != -1)
 	{
-		char * tmp = malloc(charRead);
+		char * tmp = malloc(charsRead);
 		strcpy (tmp,line);
 
 
@@ -123,11 +143,18 @@ void searchFile (char * fileName)
 			counter ++;
 		}
 
-		lineNumber++;
+		if (charsRead != 1) //not a \n
+			lineNumber++;
 	}
+
+	sprintf(string,"FECHADO %s\n",fileName);
+	writeToRegisterFile (string, getpid());
+
+	fclose (file);
 
 }
 
+//directory search
 void searchDirs (const char * dirName)
 {
 	 DIR *dir;
@@ -177,12 +204,17 @@ void searchDirs (const char * dirName)
 
 int main(int argc, char *argv[], char* envp[])
 {
+	//gets current time (time in which program start)
+	gettimeofday(&startTime,NULL);
+
+	//minimum of 3 arguments (simgrep, pattern, file)
 	if (argc < 3)
 	{
 		printf ("Invalid number of arguments.\n");
 		exit(1);
 	}
 
+	//get custom environment variable LOGFILENAME and open file with that name to use a register file
 	char * name = getenv("LOGFILENAME");
 
 	if (name == NULL) // if it doesn't found environment variable
@@ -193,8 +225,25 @@ int main(int argc, char *argv[], char* envp[])
 
 	openRegisterFile(name);
 
-	writeToRegisterFile ("COMANDO ", getpid());
+	//writes in register file command invocation
+	int j = 0;
+	char string [200];
+	char commandComponent [50];
 
+	sprintf(string, "COMANDO ");
+
+	while (j < argc)
+	{
+		sprintf(commandComponent,"%s ", argv[j]);
+		strcat (string, commandComponent);
+		j++;
+	}
+
+	strcat(string,"\n");
+	writeToRegisterFile (string, getpid());
+
+
+	//SIGINT handling
 	struct sigaction action;
 	action.sa_handler = sigint_handler;
 	sigemptyset(& (action.sa_mask));
@@ -206,6 +255,7 @@ int main(int argc, char *argv[], char* envp[])
 		exit (0);
 	}
 
+	//sets global variables with pattern, fileName and options
 	pattern = argv [argc-2];
 	char * fileName = argv[argc-1];
 
@@ -257,11 +307,13 @@ int main(int argc, char *argv[], char* envp[])
 		}
 	}
 
+	//call different functions according with allFiles option (-r)
 	if (allFiles)
 		searchDirs (fileName);
 	else
 		searchFile(fileName);
 
+	//option lineCounter -c
 	if (lineCounter == 1)
 		printf ("\nThe word was found in %d lines.\n", counter);
 
