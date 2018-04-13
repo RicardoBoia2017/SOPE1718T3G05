@@ -259,9 +259,9 @@ int main(int argc, char *argv[], char* envp[])
 	pattern = argv [argc-2];
 	char * fileName = argv[argc-1];
 
-	int i = 1;
+	int i;
 
-	for (i; i < argc - 2; i++)
+	for (i = 1; i < argc - 2; i++)
 	{
 		if (strcmp (argv[i], "-i") == 0)
 		{
