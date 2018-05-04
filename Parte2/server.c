@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <pthread.h>
+#include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/time.h> //gettimeofday
@@ -46,6 +48,23 @@ void writeToLogFile (char* string)
 	fprintf (logFilePointer, "%s\n",string);
 }
 
+//returns when its time to exit
+void controlOpenTime ()
+{
+	struct timeval currentTime; //current time
+
+	gettimeofday(&currentTime,NULL);
+
+	double diff = (double) (currentTime.tv_usec - startTime.tv_usec) / 1000000 + (double) (currentTime.tv_sec - startTime.tv_sec);
+
+	while (diff < openTime)
+	{
+		gettimeofday(&currentTime,NULL);
+		diff = (double) (currentTime.tv_usec - startTime.tv_usec) / 1000000 + (double) (currentTime.tv_sec - startTime.tv_sec);
+	}
+}
+
+//initialiazes seats array
 void initializeSeats()
 {
 	int s;
@@ -100,6 +119,8 @@ void * ticket_office (void * id)
 
 int main (int argc, char *argv[])
 {
+	pthread_t tid[nTicketsOffices];
+	int fd;
 
 	if (argc != 4)
 	{
@@ -117,23 +138,29 @@ int main (int argc, char *argv[])
 	openLogFile();
 
 
-//	if (mkfifo ("requests", S_IRUSR | S_IWUSR) == -1) //creates fifo 'requests'
+//	if (mkfifo ("requests", 0660) == -1) //creates fifo 'requests'
 //	{
 //		perror ("ERROR");
 //		exit(2);
 //	}
 
+    fd=open("requests" ,O_RDONLY);
+    if (fd == -1)
+    {
+    	perror ("Error");
+    	exit (3);
+    }
 
-	pthread_t tid[nTicketsOffices];
-	int count [nTicketsOffices];
 	int t;
+	int count [nTicketsOffices];
+
 
 	for (t = 1; t <= nTicketsOffices; t++) {  //creates nTicketsOffices threads
 		count [t-1] = t;
 	    if ( pthread_create(&tid[t-1], NULL, ticket_office, (void *) &count[t-1]) != 0)
 	    {
 	    	perror ("ERROR");
-	    	exit (3);
+	    	exit (4);
 	    }
 	}
 
@@ -143,18 +170,10 @@ int main (int argc, char *argv[])
 	    pthread_join(tid[t-1], NULL);
 	}
 
+	controlOpenTime ();
 
-	struct timeval currentTime; //current time
-
-	gettimeofday(&currentTime,NULL);
-
-	double diff = (double) (currentTime.tv_usec - startTime.tv_usec) / 1000000 + (double) (currentTime.tv_sec - startTime.tv_sec);
-	printf ("Current time: %f\n" , diff);
-
-	while (diff < openTime)
-	{
-		gettimeofday(&currentTime,NULL);
-		diff = (double) (currentTime.tv_usec - startTime.tv_usec) / 1000000 + (double) (currentTime.tv_sec - startTime.tv_sec);
+	for (t = 1; t <= nTicketsOffices; t++) { //waits for the running threads
+	    pthread_cancel(tid[t-1]);
 	}
 
 	printf ("Time is up\n");
