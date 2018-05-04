@@ -25,7 +25,7 @@ int nTicketsOffices; //number of ticket offices (number of threads)
 double openTime; //Operating time of ticket offices
 
 FILE * logFilePointer; //pointer for the logs file
-struct timeval startTime; //start time of program
+struct timeval startTime; //start time of threads
 
 
 //opens log file
@@ -100,7 +100,6 @@ void * ticket_office (void * id)
 
 int main (int argc, char *argv[])
 {
-	gettimeofday(&startTime,NULL);
 
 	if (argc != 4)
 	{
@@ -108,19 +107,22 @@ int main (int argc, char *argv[])
 		exit (1);
 	}
 
+
 	numRoomSeats = atoi(argv[1]);
 	nTicketsOffices = atoi(argv [2]);
 	openTime = atof(argv[3]);
 
+
 	initializeSeats();
-	printf ("%d\n", isSeatFree (seats, 10000) );
 	openLogFile();
+
 
 //	if (mkfifo ("requests", S_IRUSR | S_IWUSR) == -1) //creates fifo 'requests'
 //	{
 //		perror ("ERROR");
 //		exit(2);
 //	}
+
 
 	pthread_t tid[nTicketsOffices];
 	int count [nTicketsOffices];
@@ -135,20 +137,27 @@ int main (int argc, char *argv[])
 	    }
 	}
 
+	gettimeofday(&startTime,NULL);
+
 	for (t = 1; t <= nTicketsOffices; t++) { //waits for the running threads
 	    pthread_join(tid[t-1], NULL);
 	}
 
-	struct timeval currentTime; //current time
-	gettimeofday(&currentTime,NULL);
-	suseconds_t diff = currentTime.tv_sec - startTime.tv_sec;
-	double diff_double = ((double)currentTime/1000000); //seconds
 
-	while (diff_double < openTime)
+	struct timeval currentTime; //current time
+
+	gettimeofday(&currentTime,NULL);
+
+	double diff = (double) (currentTime.tv_usec - startTime.tv_usec) / 1000000 + (double) (currentTime.tv_sec - startTime.tv_sec);
+	printf ("Current time: %f\n" , diff);
+
+	while (diff < openTime)
 	{
 		gettimeofday(&currentTime,NULL);
-		diff = currentTime.tv_sec - startTime.tv_sec;
+		diff = (double) (currentTime.tv_usec - startTime.tv_usec) / 1000000 + (double) (currentTime.tv_sec - startTime.tv_sec);
 	}
 
 	printf ("Time is up\n");
+
+	exit (0);
 }
