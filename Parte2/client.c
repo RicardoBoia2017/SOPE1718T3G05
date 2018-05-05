@@ -11,7 +11,15 @@
 #define WIDTH_XXNN 4
 #define WIDTH_SEAT 5
 
-int requestsFd; // requests file desciptor
+typedef struct
+{
+	int clientId; // pid of process
+	int nSeats; //number of desired seats
+	int wantedSeats [99]; //array with the client's favorite spots
+} Request;
+
+int requestsFd; // requests file descriptor
+int answerFd; //answer file descriptor
 
 //calculates length from int
 int numDigits (int number)
@@ -29,6 +37,7 @@ int numDigits (int number)
 	return res;
 }
 
+//opens fifo that waits for answer
 void makeAnswerFifo()
 {
 	char fifoName [8];
@@ -40,15 +49,25 @@ void makeAnswerFifo()
 		perror("ERROR");
 		exit(2);
 	}
+
+	answerFd = open("requests" ,O_RDONLY);
+
+	if (answerFd == -1)
+	{
+    	perror ("Error");
+    	exit (3);
+	}
 }
 
+//opens fifo that sends requests
 void openRequestsFifo ()
 {
-    requestsFd=open("requests" ,O_WRONLY);
+    requestsFd = open("requests" ,O_WRONLY);
+
     if (requestsFd == -1)
     {
     	perror ("Error");
-    	exit (3);
+    	exit (4);
     }
 }
 
@@ -56,7 +75,7 @@ int main (int argc, char *argv[])
 {
 	double openTime;
 	struct timeval startTime, currentTime;
-	char request [500]; //request
+	Request *request = malloc(sizeof(Request));;
 
 	if (argc < 4)
 	{
@@ -68,17 +87,15 @@ int main (int argc, char *argv[])
 
 //	makeAnswerFifo();
 
-//	openRequestsFifo ();
+	openRequestsFifo ();
 
 	//builds request
-	sprintf (request, "%d %d ", getpid(), atoi (argv[1]));
+	request->clientId = getpid();
+	request->nSeats = atoi(argv[2]);
 
     int i;
     for (i = 0; i < argc - 3; i++)
-    {
-    	strcat (request, argv [i+3]);
-    	strcat (request, " ");
-    }
+    	request->wantedSeats [i] = atoi (argv [i+3]);
 
 
 	gettimeofday(&startTime,NULL);
@@ -93,5 +110,5 @@ int main (int argc, char *argv[])
 		diff = (double) (currentTime.tv_usec - startTime.tv_usec) / 1000000 + (double) (currentTime.tv_sec - startTime.tv_sec);
 	}
 
- //   write (fd, request, strlen(request));
+   write (requestsFd, request, sizeof (Request));
 }

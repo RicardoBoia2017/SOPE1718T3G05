@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <fcntl.h>
+#include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/time.h> //gettimeofday
@@ -15,11 +16,17 @@ pthread_mutex_t mut = PTHREAD_MUTEX_INITIALIZER;  // mutex p/a sec.critica
 
 typedef struct
 {
-	int seatNum;
-	int isFree;
-	int clientId;
+	int seatNum; //seat number
+	int isFree; //if the seat is free
+	int clientId; //id of the client (initialized as 0)
 } Seat;
 
+typedef struct
+{
+	int clientId; // pid of process
+	int nSeats; //number of desired seats
+	int wantedSeats [MAX_CLI_SEATS-1]; //array with the client's favorite spots
+} Request;
 
 Seat seats [MAX_ROOM_SEATS - 1]; //seats
 int numRoomSeats; //available seats to the event
@@ -27,6 +34,7 @@ int nTicketsOffices; //number of ticket offices (number of threads)
 double openTime; //Operating time of ticket offices
 
 FILE * logFilePointer; //pointer for the logs file
+int requestsFd; // requests file descriptor
 struct timeval startTime; //start time of threads
 
 
@@ -38,7 +46,7 @@ void openLogFile ()
 	if (logFilePointer == 0)
 	{
 		printf ("There was an error opening the register file.\n");
-		exit(1);
+		exit(2);
 	}
 }
 
@@ -101,7 +109,25 @@ void freeSeat(Seat *seats, int seatNum)
 	seats [seatNum-1].isFree = 1;
 }
 
-//book the seats
+//creates and open 'requests' fifo
+void makeRequestsFifo()
+{
+		if (mkfifo ("requests", 0660) == -1) //creates fifo 'requests'
+		{
+			perror ("ERROR");
+			exit(3);
+		}
+
+	    requestsFd=open("requests" ,O_RDONLY);
+
+	    if (requestsFd == -1)
+	    {
+	    	perror ("Error");
+	    	exit (4);
+	    }
+}
+
+//books the seats
 void * ticket_office (void * id)
 {
 //	pthread_mutex_lock(&mut);
@@ -120,7 +146,6 @@ void * ticket_office (void * id)
 int main (int argc, char *argv[])
 {
 	pthread_t tid[nTicketsOffices];
-	int fd;
 
 	if (argc != 4)
 	{
@@ -133,23 +158,10 @@ int main (int argc, char *argv[])
 	nTicketsOffices = atoi(argv [2]);
 	openTime = atof(argv[3]);
 
-
 	initializeSeats();
 	openLogFile();
 
-
-//	if (mkfifo ("requests", 0660) == -1) //creates fifo 'requests'
-//	{
-//		perror ("ERROR");
-//		exit(2);
-//	}
-
-    fd=open("requests" ,O_RDONLY);
-    if (fd == -1)
-    {
-    	perror ("Error");
-    	exit (3);
-    }
+	makeRequestsFifo ();
 
 	int t;
 	int count [nTicketsOffices];
@@ -160,7 +172,7 @@ int main (int argc, char *argv[])
 	    if ( pthread_create(&tid[t-1], NULL, ticket_office, (void *) &count[t-1]) != 0)
 	    {
 	    	perror ("ERROR");
-	    	exit (4);
+	    	exit (5);
 	    }
 	}
 
@@ -170,9 +182,13 @@ int main (int argc, char *argv[])
 	    pthread_join(tid[t-1], NULL);
 	}
 
-	controlOpenTime ();
+	Request *request = malloc (sizeof (Request));
 
-	for (t = 1; t <= nTicketsOffices; t++) { //waits for the running threads
+	read (requestsFd, request,sizeof (Request));
+
+//	controlOpenTime ();
+
+	for (t = 1; t <= nTicketsOffices; t++) { //cancels the running threads
 	    pthread_cancel(tid[t-1]);
 	}
 
