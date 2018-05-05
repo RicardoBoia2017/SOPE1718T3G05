@@ -29,9 +29,11 @@ typedef struct
 } Request;
 
 Seat seats [MAX_ROOM_SEATS - 1]; //seats
+Request requests [200];
+int requestsSize = 0;
+
+int stop = 0; //controls tickets offices open time
 int numRoomSeats; //available seats to the event
-int nTicketsOffices; //number of ticket offices (number of threads)
-double openTime; //Operating time of ticket offices
 
 FILE * logFilePointer; //pointer for the logs file
 int requestsFd; // requests file descriptor
@@ -57,8 +59,9 @@ void writeToLogFile (char* string)
 }
 
 //returns when its time to exit
-void controlOpenTime ()
+void controlOpenTime (double openTime)
 {
+	printf ("In\n");
 	struct timeval currentTime; //current time
 
 	gettimeofday(&currentTime,NULL);
@@ -130,13 +133,16 @@ void makeRequestsFifo()
 //books the seats
 void * ticket_office (void * id)
 {
-//	pthread_mutex_lock(&mut);
 
 	char message[9];
 	sprintf (message, "%d-OPEN", *(int *) id);
 	writeToLogFile (message);
 
-//	pthread_mutex_unlock(&mut);
+	while (1)
+	{
+		printf ("Stop: %d\n", stop);
+		sleep (1);
+	}
 
 	sprintf (message, "%d-CLOSED", *(int *) id);
 	writeToLogFile (message);
@@ -145,7 +151,9 @@ void * ticket_office (void * id)
 
 int main (int argc, char *argv[])
 {
-	pthread_t tid[nTicketsOffices];
+	int nTicketsOffices; //number of ticket offices (number of threads)
+	double openTime; //Operating time of ticket offices
+
 
 	if (argc != 4)
 	{
@@ -163,6 +171,7 @@ int main (int argc, char *argv[])
 
 	makeRequestsFifo ();
 
+	pthread_t tid[nTicketsOffices];
 	int t;
 	int count [nTicketsOffices];
 
@@ -178,21 +187,24 @@ int main (int argc, char *argv[])
 
 	gettimeofday(&startTime,NULL);
 
+
+
 	for (t = 1; t <= nTicketsOffices; t++) { //waits for the running threads
 	    pthread_join(tid[t-1], NULL);
 	}
+
+	controlOpenTime (openTime);
+	printf ("Hello\n");
+	stop = 1;
 
 	Request *request = malloc (sizeof (Request));
 
 	read (requestsFd, request,sizeof (Request));
 
-//	controlOpenTime ();
-
 	for (t = 1; t <= nTicketsOffices; t++) { //cancels the running threads
 	    pthread_cancel(tid[t-1]);
 	}
 
-	printf ("Time is up\n");
 
 	exit (0);
 }
