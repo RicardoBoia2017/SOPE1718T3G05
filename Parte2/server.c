@@ -10,7 +10,7 @@
 
 #define MAX_ROOM_SEATS 9999
 #define MAX_CLI_SEATS 99
-#define DELAY 5000 //delay 5 seconds
+#define DELAY() sleep(2) //delay 5 seconds
 
 pthread_mutex_t mut = PTHREAD_MUTEX_INITIALIZER;  // mutex p/a sec.critica
 
@@ -138,7 +138,7 @@ void * ticket_office (void * id)
 	sprintf (message, "%d-OPEN", *(int *) id);
 	writeToLogFile (message);
 
-	while (1)
+	while (!stop)
 	{
 		printf ("Stop: %d\n", stop);
 		sleep (1);
@@ -187,14 +187,7 @@ int main (int argc, char *argv[])
 
 	gettimeofday(&startTime,NULL);
 
-
-
-	for (t = 1; t <= nTicketsOffices; t++) { //waits for the running threads
-	    pthread_join(tid[t-1], NULL);
-	}
-
 	controlOpenTime (openTime);
-	printf ("Hello\n");
 	stop = 1;
 
 	Request *request = malloc (sizeof (Request));
@@ -205,6 +198,6 @@ int main (int argc, char *argv[])
 	    pthread_cancel(tid[t-1]);
 	}
 
-
+	close (requestsFd);
 	exit (0);
 }
