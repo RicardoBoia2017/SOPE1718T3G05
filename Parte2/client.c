@@ -19,7 +19,7 @@ typedef struct
 } Request;
 
 int requestsFd; // requests file descriptor
-int answerFd; //answer file descriptor
+char answerFifoName [8]; //answer file descriptor
 
 //calculates length from int
 int numDigits (int number)
@@ -37,26 +37,17 @@ int numDigits (int number)
 	return res;
 }
 
-//opens fifo that waits for answer
+//makes fifo that waits for answer
 void makeAnswerFifo()
 {
-	char fifoName [8];
+	sprintf (answerFifoName, "ans%d", getpid());
 
-	sprintf (fifoName, "ans%d", getpid());
-
-	if (mkfifo(fifoName, 0660) == -1) //creates fifo 'requests'
+	if (mkfifo(answerFifoName, 0660) == -1) //creates fifo 'requests'
 	{
 		perror("ERROR");
 		exit(2);
 	}
 
-	answerFd = open("requests" ,O_RDONLY);
-
-	if (answerFd == -1)
-	{
-    	perror ("Error");
-    	exit (3);
-	}
 }
 
 //opens fifo that sends requests
@@ -85,7 +76,7 @@ int main (int argc, char *argv[])
 
 	openTime = atof(argv[1]);
 
-//	makeAnswerFifo();
+	makeAnswerFifo();
 
 	openRequestsFifo ();
 
@@ -111,4 +102,19 @@ int main (int argc, char *argv[])
 	}
 
    write (requestsFd, request, sizeof (Request));
+
+
+   	int answerFd;
+	answerFd = open(answerFifoName ,O_RDONLY);
+
+	if (answerFd == -1)
+	{
+		perror ("Error");
+		exit (3);
+	}
+
+   int answer;
+   read (answerFd, &answer, sizeof (int));
+
+   exit (0);
 }
