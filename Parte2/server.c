@@ -29,7 +29,7 @@ typedef struct
 } Request;
 
 Seat seats [MAX_ROOM_SEATS - 1]; //seats
-Request requests [200];
+Request * requests [200];
 int requestsSize = 0;
 
 int stop = 0; //controls tickets offices open time
@@ -59,9 +59,8 @@ void writeToLogFile (char* string)
 }
 
 //returns when its time to exit
-void controlOpenTime (double openTime)
+void getRequests (double openTime)
 {
-	printf ("In\n");
 	struct timeval currentTime; //current time
 
 	gettimeofday(&currentTime,NULL);
@@ -70,9 +69,22 @@ void controlOpenTime (double openTime)
 
 	while (diff < openTime)
 	{
+		Request *request = malloc (sizeof (Request));
+
+		read (requestsFd, request,sizeof (Request));
+
+		if (request->clientId != 0)
+		{
+			requests [requestsSize] = request;
+			requestsSize++;
+		}
+
 		gettimeofday(&currentTime,NULL);
 		diff = (double) (currentTime.tv_usec - startTime.tv_usec) / 1000000 + (double) (currentTime.tv_sec - startTime.tv_sec);
+
 	}
+
+	stop = 1;
 }
 
 //initialiazes seats array
@@ -187,17 +199,11 @@ int main (int argc, char *argv[])
 
 	gettimeofday(&startTime,NULL);
 
-	controlOpenTime (openTime);
-	stop = 1;
+	getRequests (openTime);
 
-	Request *request = malloc (sizeof (Request));
-
-	read (requestsFd, request,sizeof (Request));
-
-	for (t = 1; t <= nTicketsOffices; t++) { //cancels the running threads
-	    pthread_cancel(tid[t-1]);
-	}
+	printf ("\n%d\n", requestsSize);
 
 	close (requestsFd);
+	remove ("requests"); // REMOVE REMOVE REMOVE
 	exit (0);
 }
