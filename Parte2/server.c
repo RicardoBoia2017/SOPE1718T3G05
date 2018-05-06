@@ -12,7 +12,7 @@
 #define MAX_CLI_SEATS 99
 #define DELAY() sleep(2) //delay 5 seconds
 
-pthread_mutex_t mut = PTHREAD_MUTEX_INITIALIZER;  // mutex p/a sec.critica
+pthread_mutex_t mut = PTHREAD_MUTEX_INITIALIZER;  // mutex for critical section
 
 typedef struct
 {
@@ -29,11 +29,12 @@ typedef struct
 } Request;
 
 Seat seats [MAX_ROOM_SEATS - 1]; //seats
+int seatsBooked = 1;
 Request * requests [200];
 int requestsSize = 0;
 
 int stop = 0; //controls tickets offices open time
-int numRoomSeats; //available seats to the event
+int numRoomSeats = 0; //available seats to the event
 
 FILE * logFilePointer; //pointer for the logs file
 int requestsFd; // requests file descriptor
@@ -56,6 +57,14 @@ void openLogFile ()
 void writeToLogFile (char* string)
 {
 	fprintf (logFilePointer, "%s\n",string);
+}
+
+//decrements each request one position
+void shiftArray ()
+{
+	int i;
+	for (i = 1; i < requestsSize; ++i)
+	  requests[i-1] = requests[i];
 }
 
 //returns when its time to exit
@@ -142,23 +151,93 @@ void makeRequestsFifo()
 	    }
 }
 
+//counts number of favorite seats
+int countFavoriteSeats (Request * request)
+{
+	int wantedSeatsCount = 0;
+	int i = 0;
+	int seatId  = request->wantedSeats[0];
+
+	while (seatId != 0)
+	{
+		wantedSeatsCount++;
+		i++;
+		seatId = request->wantedSeats[i];
+	}
+
+	return wantedSeatsCount;
+}
+
+//check if request is valid. If it is, tries to book the seats
+int checkRequest (Request * request)
+{
+	//check conditions
+	if (request->nSeats > MAX_CLI_SEATS) //condition #1
+		return -1;
+
+	int nWantedSeats = countFavoriteSeats(request);
+	if (nWantedSeats < request->nSeats || nWantedSeats > MAX_CLI_SEATS) //condition #2
+		return -2;
+
+	int s;
+	for (s = 0; s < nWantedSeats; s++) //condition #3
+	{
+		if (request->wantedSeats[s] < 1 || request->wantedSeats[s] > numRoomSeats)
+			return -3;
+	}
+
+	//TODO condition 4?
+
+	if (seatsBooked == numRoomSeats) //condition 6
+		return -6;
+
+	return 0;
+}
+
 //books the seats
 void * ticket_office (void * id)
 {
 
 	char message[9];
+	Request * request = malloc (sizeof (Request));
+	int requestToManage = 0; //to be used as boolean
+
 	sprintf (message, "%d-OPEN", *(int *) id);
 	writeToLogFile (message);
 
 	while (!stop)
 	{
-		printf ("Stop: %d\n", stop);
-		sleep (1);
+		requestToManage = 0;
+
+		pthread_mutex_lock(&mut);
+
+		if(requestsSize > 0)
+		{
+			requestToManage = 1;
+			request = requests [0];
+			requestsSize--;
+			shiftArray();
+		}
+
+		pthread_mutex_unlock(&mut);
+
+		if (requestToManage)
+		{
+			int returnValue = checkRequest (request);
+
+			if (returnValue != 0)
+				printf ("Return value: %d\n", returnValue);
+				//TODO write to ans fifo
+
+
+		}
+
 	}
 
 	sprintf (message, "%d-CLOSED", *(int *) id);
 	writeToLogFile (message);
 
+	free (request);
 }
 
 int main (int argc, char *argv[])
@@ -174,11 +253,13 @@ int main (int argc, char *argv[])
 	}
 
 
+
 	numRoomSeats = atoi(argv[1]);
 	nTicketsOffices = atoi(argv [2]);
 	openTime = atof(argv[3]);
 
 	initializeSeats();
+
 	openLogFile();
 
 	makeRequestsFifo ();
@@ -186,7 +267,6 @@ int main (int argc, char *argv[])
 	pthread_t tid[nTicketsOffices];
 	int t;
 	int count [nTicketsOffices];
-
 
 	for (t = 1; t <= nTicketsOffices; t++) {  //creates nTicketsOffices threads
 		count [t-1] = t;
@@ -199,9 +279,8 @@ int main (int argc, char *argv[])
 
 	gettimeofday(&startTime,NULL);
 
-	getRequests (openTime);
 
-	printf ("\n%d\n", requestsSize);
+	getRequests (openTime);
 
 	close (requestsFd);
 	remove ("requests"); // REMOVE REMOVE REMOVE
