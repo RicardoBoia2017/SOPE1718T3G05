@@ -166,58 +166,6 @@ int numDigits (int number)
 	return res;
 }
 
-//Writes in log file when request is rejected
-void writeRejectedLogFile (int threadId, Request *request, int rejectionMotive)
-{
-	char message [200];
-
-	//threadId width = 2
-	if (threadId < 10)
-		sprintf (message, "0%d-", threadId);
-	else
-		sprintf (message, "%d-", threadId);
-
-	//client Id width = 5
-	char clientIdString [5];
-	int clientIdLength = numDigits (request->clientId);
-
-	if (clientIdLength == 5)
-	{
-		sprintf (clientIdString, "%d-", request->clientId);
-		strcat (message, clientIdString);
-	}
-	else
-	{
-		while (clientIdLength < 5)
-		{
-			strcat (clientIdString, "0");
-			clientIdLength++;
-		}
-
-		char clientId [4];
-		sprintf (clientId, "%d", request->clientId);
-
-		strcat(clientIdString, clientId);
-		strcat(message, clientIdString);
-	}
-
-	//number of seats width = 2
-	char nSeatsString [2];
-
-	if (request->nSeats < 10)
-	{
-		sprintf (nSeatsString, "-0%d", request->nSeats);
-		strcat (message, nSeatsString);
-	}
-	else
-	{
-		sprintf (nSeatsString, "-%d", request->nSeats);
-		strcat (message, nSeatsString);
-	}
-
-	printf ("%s\n", message);
-}
-
 //Counts number of favorite seats in a request
 int countFavoriteSeats (Request * request)
 {
@@ -234,6 +182,118 @@ int countFavoriteSeats (Request * request)
 	}
 
 	return wantedSeatsCount;
+}
+
+//Returns the message according to the rejection code
+char * getErrorMsg (int code)
+{
+	switch (code)
+	{
+	case -1:
+		return " MAX";
+		break;
+
+	case -2:
+		return " NST";
+		break;
+
+	case -3:
+		return " IID";
+		break;
+
+	case -4:
+		return " ERR";
+		break;
+
+	case -5:
+		return " NAV";
+		break;
+
+	case -6:
+		return " FUL";
+		break;
+	}
+
+	return " OK";
+}
+
+//Writes in log file when request is rejected
+void writeRejectedLogFile (int threadId, Request *request, int rejectionMotive)
+{
+	char message [200];
+
+	//threadId width = 2
+	if (threadId < 10)
+		sprintf (message, "0%d-", threadId);
+	else
+		sprintf (message, "%d-", threadId);
+
+	//client Id width = 5
+	char clientIdString [5];
+	int clientIdLength = numDigits (request->clientId);
+
+	if (clientIdLength == 5)
+		sprintf (clientIdString, "%d-", request->clientId);
+
+	else
+	{
+		while (clientIdLength < 5)
+		{
+			strcat (clientIdString, "0");
+			clientIdLength++;
+		}
+
+		char clientId [4];
+		sprintf (clientId, "%d", request->clientId);
+
+		strcat(clientIdString, clientId);
+	}
+
+	strcat(message, clientIdString);
+
+	//number of seats width = 2
+	char nSeatsString [2];
+
+	if (request->nSeats < 10)
+		sprintf (nSeatsString, "-0%d: ", request->nSeats);
+
+	else
+		sprintf (nSeatsString, "-%d: ", request->nSeats);
+
+
+	strcat (message, nSeatsString);
+
+	//favorite seats width = 4
+	int favoriteSeatsSize = countFavoriteSeats (request);
+	int s = 0;
+
+	while (s < favoriteSeatsSize)
+	{
+		int seatLength = numDigits (request->favoriteSeats[s]);
+		char favoriteSeatString [4];
+
+		sprintf (favoriteSeatString, "%d ", request->favoriteSeats[s]);
+
+		if(seatLength < 4)
+		{
+			int i;
+			for (i = seatLength; i < 4; i++)
+			{
+				strcat (message, "0");
+			}
+
+		}
+
+		strcat (message, favoriteSeatString);
+		s++;
+	}
+
+	char * errorMsg = malloc (3);
+	errorMsg = getErrorMsg (rejectionMotive);
+
+	strcat (message, errorMsg);
+
+	writeToLogFile (message);
 }
 
 //Check if a request is valid.
