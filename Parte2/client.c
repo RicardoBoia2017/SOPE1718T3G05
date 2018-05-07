@@ -113,8 +113,9 @@ int main (int argc, char *argv[])
 		exit (3);
 	}
 
-   int answer;
-   read (answerFd, &answer, sizeof (int));
+   char answer [50];
+   read (answerFd, answer, 50);
 
+   printf ("%s\n", answer);
    exit (0);
 }

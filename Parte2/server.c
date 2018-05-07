@@ -10,7 +10,7 @@
 
 #define MAX_ROOM_SEATS 9999
 #define MAX_CLI_SEATS 99
-#define DELAY() sleep(2) //delay 5 seconds
+#define DELAY() sleep(2) //delay 2 seconds
 
 pthread_mutex_t mut = PTHREAD_MUTEX_INITIALIZER;  // mutex for critical section
 
@@ -25,13 +25,13 @@ typedef struct
 {
 	int clientId; // pid of process
 	int nSeats; //number of desired seats
-	int wantedSeats [MAX_CLI_SEATS-1]; //array with the client's favorite spots
+	int favoriteSeats [MAX_CLI_SEATS-1]; //array with the client's favorite spots
 } Request;
 
 Seat seats [MAX_ROOM_SEATS - 1]; //seats
-int seatsBooked = 1;
-Request * requests [200];
-int requestsSize = 0;
+int seatsBooked = 0; //number of seats booked for the event
+Request * requests [200]; //stores the request that haven't been picked up by thread
+int requestsSize = 0; //size of requests array
 
 int stop = 0; //controls tickets offices open time
 int numRoomSeats = 0; //available seats to the event
@@ -157,13 +157,13 @@ int countFavoriteSeats (Request * request)
 	//may not work as intended if 0 is in the middle of the seats
 	int wantedSeatsCount = 0;
 	int i = 0;
-	int seatId  = request->wantedSeats[0];
+	int seatId  = request->favoriteSeats[0];
 
 	while (seatId != 0)
 	{
 		wantedSeatsCount++;
 		i++;
-		seatId = request->wantedSeats[i];
+		seatId = request->favoriteSeats[i];
 	}
 
 	return wantedSeatsCount;
@@ -183,7 +183,7 @@ int checkRequest (Request * request)
 	int s;
 	for (s = 0; s < nWantedSeats; s++) //condition #3 - wanted spot's id has to be positive and lower than numRoomSeats
 	{
-		if (request->wantedSeats[s] < 1 || request->wantedSeats[s] > numRoomSeats)
+		if (request->favoriteSeats[s] < 1 || request->favoriteSeats[s] > numRoomSeats)
 			return -3;
 	}
 
@@ -244,36 +244,74 @@ void * ticket_office (void * id)
 
 			if (returnValue != 0)
 			{
-				write (answerFd, &returnValue, sizeof(int));
+				char * answer = malloc (2 * sizeof(char));
+				sprintf (answer , "%d", returnValue);
+
+				write (answerFd, answer, sizeof(answer));
+
 				continue;
 			}
 
-			//tries to book the seats
-			int wantedSeatsCount = countFavoriteSeats(request);
-			int seatsBooked = 0;
-			int s = 0;
 
-			while (seatsBooked < request->nSeats) //while the number of seats booked isn't the required by the client
+			//tries to book the seats
+			int wantedSeatsCount = countFavoriteSeats(request); //number of seats on favorite seats
+
+			int numberSeatsBooked = 0; //number of seats booked in a certain moment
+			int seatsBooked [request->nSeats]; //id of seats booked
+			int sb = 0; //to parse through seatsBooked array
+			int ws = 0; //to parse  through favorite seats array
+
+			int booked = 1; //to be used as boolean. Used to know if all seats were booked or not
+
+			while (numberSeatsBooked < request->nSeats) //while the number of seats booked isn't the required by the client
 			{
+
 				if(wantedSeatsCount == 0) //if this happens, then server didn't book the required amount of seats
 				{
-					//condition #5
+					write (answerFd, "-5", 2*sizeof(char));
+					booked = 0;
+					break;
 				}
 
 				pthread_mutex_lock(&mut);
 
-				if (isSeatFree(seats, request->wantedSeats[s]))
+				if (isSeatFree(seats, request->favoriteSeats[ws]))
 				{
-					bookSeat (seats, request->wantedSeats[s], request->clientId);
-					seatsBooked++;
+					bookSeat (seats, request->favoriteSeats[ws], request->clientId);
+					seatsBooked [sb] = request->favoriteSeats[ws];
+					sb++;
+					numberSeatsBooked++;
 				}
 
 				pthread_mutex_unlock(&mut);
 
 				wantedSeatsCount--;
 
-				s++;
+				ws++;
 			}
+
+			if (booked)
+			{
+				char * answer = malloc (200);
+
+				sprintf (answer, "%d", request->nSeats);
+
+				int i;
+				for (i = 0; i < request->nSeats; i++)
+				{
+					char seat [5];
+					sprintf (seat, " %d", seatsBooked[i]);
+
+					strcat (answer, seat);
+				}
+
+				write (answerFd, answer, sizeof(answer));
+
+			}
+			pthread_mutex_lock(&mut);
+			DELAY();
+			pthread_mutex_unlock(&mut);
+
 		}
 
 	}
@@ -282,6 +320,8 @@ void * ticket_office (void * id)
 	writeToLogFile (message);
 
 	free (request);
+
+	return 0;
 }
 
 int main (int argc, char *argv[])
@@ -294,8 +334,6 @@ int main (int argc, char *argv[])
 		printf ("Usage: server <num_room_seats> <num_ticket_offices> <open_time> \n");
 		exit (1);
 	}
-
-
 
 	numRoomSeats = atoi(argv[1]);
 	nTicketsOffices = atoi(argv [2]);
