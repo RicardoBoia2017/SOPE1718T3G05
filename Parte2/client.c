@@ -117,5 +117,7 @@ int main (int argc, char *argv[])
    read (answerFd, answer, 50);
 
    printf ("%s\n", answer);
+
+   remove (fifoName);
    exit (0);
 }

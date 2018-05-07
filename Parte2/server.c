@@ -10,7 +10,8 @@
 
 #define MAX_ROOM_SEATS 9999
 #define MAX_CLI_SEATS 99
-#define DELAY() sleep(2) //delay 2 seconds
+#define WIDTH_PID
+#define DELAY() sleep(1) //delay 2 seconds
 
 pthread_mutex_t mut = PTHREAD_MUTEX_INITIALIZER;  // mutex for critical section
 
@@ -156,10 +157,22 @@ int numDigits (int number)
 {
 	int res = 0;
 
-	while (number > 10)
+	if (number > 0)
 	{
-		number /= 10;
-		res++;
+		while (number > 10)
+		{
+			number /= 10;
+			res++;
+		}
+	}
+
+	else
+	{
+		while (number < -10)
+		{
+			number /= 10;
+			res++;
+		}
 	}
 
 	res ++;
@@ -190,27 +203,27 @@ char * getErrorMsg (int code)
 	switch (code)
 	{
 	case -1:
-		return " MAX";
+		return " - MAX";
 		break;
 
 	case -2:
-		return " NST";
+		return " - NST";
 		break;
 
 	case -3:
-		return " IID";
+		return " - IID";
 		break;
 
 	case -4:
-		return " ERR";
+		return " - ERR";
 		break;
 
 	case -5:
-		return " NAV";
+		return " - NAV";
 		break;
 
 	case -6:
-		return " FUL";
+		return " - FUL";
 		break;
 	}
 
@@ -220,7 +233,7 @@ char * getErrorMsg (int code)
 //Writes in log file when request is rejected
 void writeRejectedLogFile (int threadId, Request *request, int rejectionMotive)
 {
-	char message [200];
+	char message [400];
 
 	//threadId width = 2
 	if (threadId < 10)
@@ -233,11 +246,12 @@ void writeRejectedLogFile (int threadId, Request *request, int rejectionMotive)
 	int clientIdLength = numDigits (request->clientId);
 
 	if (clientIdLength == 5)
-		sprintf (clientIdString, "%d-", request->clientId);
+		sprintf (clientIdString, "%d", request->clientId);
 
 	else
 	{
-		while (clientIdLength < 5)
+		sprintf (clientIdString, "0");
+		while (clientIdLength < 4)
 		{
 			strcat (clientIdString, "0");
 			clientIdLength++;
@@ -296,6 +310,107 @@ void writeRejectedLogFile (int threadId, Request *request, int rejectionMotive)
 	writeToLogFile (message);
 }
 
+//Writes in log file when request is booked
+void writeBookedLogFile (int threadId, Request * request, int seatsBooked[])
+{
+	char message [400];
+
+	//threadId width = 2
+	if (threadId < 10)
+		sprintf (message, "0%d-", threadId);
+	else
+		sprintf (message, "%d-", threadId);
+
+	//client Id width = 5
+	char clientIdString [5];
+	int clientIdLength = numDigits (request->clientId);
+
+	if (clientIdLength == 5)
+		sprintf (clientIdString, "%d", request->clientId);
+
+
+	else
+	{
+		sprintf (clientIdString, "0");
+		while (clientIdLength < 4)
+		{
+			strcat (clientIdString, "0");
+			clientIdLength++;
+		}
+		char clientId [4];
+
+		sprintf (clientId, "%d", request->clientId);
+
+		strcat(clientIdString, clientId);
+	}
+
+	strcat(message, clientIdString);
+
+	//number of seats width = 2
+	char nSeatsString [2];
+
+	if (request->nSeats < 10)
+		sprintf (nSeatsString, "-0%d: ", request->nSeats);
+
+	else
+		sprintf (nSeatsString, "-%d: ", request->nSeats);
+
+
+	strcat (message, nSeatsString);
+
+	//favorite seats width = 4
+	int favoriteSeatsSize = countFavoriteSeats (request);
+	int s = 0;
+
+	while (s < favoriteSeatsSize)
+	{
+		int seatLength = numDigits (request->favoriteSeats[s]);
+		char favoriteSeatString [4];
+
+		sprintf (favoriteSeatString, "%d ", request->favoriteSeats[s]);
+
+		if(seatLength < 4)
+		{
+			int i;
+			for (i = seatLength; i < 4; i++)
+			{
+				strcat (message, "0");
+			}
+
+		}
+
+		strcat (message, favoriteSeatString);
+		s++;
+	}
+
+	strcat (message, "- ");
+	//booked seats width = 4
+	s = 0;
+	while (s < request->nSeats)
+	{
+		int seatLength = numDigits (seatsBooked [s]);
+		char bookedSeatString [4];
+
+		sprintf (bookedSeatString, "%d ", request->favoriteSeats[s]);
+
+		if(seatLength < 4)
+		{
+			int i;
+			for (i = seatLength; i < 4; i++)
+			{
+				strcat (message, "0");
+			}
+
+		}
+
+		strcat (message, bookedSeatString);
+		s++;
+	}
+
+	writeToLogFile (message);
+
+}
+
 //Check if a request is valid.
 int checkRequest (Request * request)
 {
@@ -326,23 +441,22 @@ int checkRequest (Request * request)
 //Thread to book seats
 void * ticket_office (void * id)
 {
-
 	char message[9];
-	Request * request = malloc (sizeof (Request));
-	int requestToManage = 0; //to be used as boolean
+	Request * request = malloc (sizeof (Request)); //where the requests are gonna be stored
+	int requestToBook = 0; //to be used as boolean
 
 	sprintf (message, "%d-OPEN", *(int *) id);
 	writeToLogFile (message);
 
 	while (!stop)
-	{
-		requestToManage = 0;
+  	{
+		requestToBook = 0;
 
 		pthread_mutex_lock(&mut);
 
 		if(requestsSize > 0) //if true, then there is a request to be collected
 		{
-			requestToManage = 1;
+			requestToBook = 1;
 			request = requests [0];
 			requestsSize--;
 			shiftArray();
@@ -350,7 +464,7 @@ void * ticket_office (void * id)
 
 		pthread_mutex_unlock(&mut);
 
-		if (requestToManage) //if true, then a request was collected
+		if (requestToBook) //if true, then a request was collected
 		{
 			//opens fifo to answer client
 			int answerFd = 0;
@@ -375,8 +489,8 @@ void * ticket_office (void * id)
 				sprintf (answer , "%d", returnValue);
 
 				write (answerFd, answer, sizeof(answer));
-
 				writeRejectedLogFile (*(int *) id, request, returnValue);
+
 				continue;
 			}
 
@@ -386,37 +500,50 @@ void * ticket_office (void * id)
 
 			int numberSeatsBooked = 0; //number of seats booked in a certain moment
 			int seatsBooked [request->nSeats]; //id of seats booked
+
 			int sb = 0; //to parse through seatsBooked array
 			int ws = 0; //to parse  through favorite seats array
 
 			int booked = 1; //to be used as boolean. Used to know if all seats were booked or not
 
+			pthread_mutex_lock(&mut);
+
+
 			while (numberSeatsBooked < request->nSeats) //while the number of seats booked isn't the required by the client
 			{
 
-				if(wantedSeatsCount == 0) //if this happens, then server didn't book the required amount of seats
+				if(wantedSeatsCount == 0) //condition #5 - if this happens, then server didn't book the required amount of seats
 				{
 					write (answerFd, "-5", 2*sizeof(char));
 					booked = 0;
+
+					int i;
+					for (i = 0; i < numberSeatsBooked; i++)
+					{
+						freeSeat (seats, seatsBooked [i]);
+						DELAY();
+					}
+					writeRejectedLogFile (*(int *) id, request, -5);
 					break;
 				}
 
-				pthread_mutex_lock(&mut);
-
 				if (isSeatFree(seats, request->favoriteSeats[ws]))
 				{
+					DELAY();
 					bookSeat (seats, request->favoriteSeats[ws], request->clientId);
+					DELAY();
 					seatsBooked [sb] = request->favoriteSeats[ws];
 					sb++;
 					numberSeatsBooked++;
 				}
 
-				pthread_mutex_unlock(&mut);
 
 				wantedSeatsCount--;
 
 				ws++;
 			}
+
+			pthread_mutex_unlock(&mut);
 
 			if (booked)
 			{
@@ -434,15 +561,14 @@ void * ticket_office (void * id)
 				}
 
 				write (answerFd, answer, sizeof(answer));
-
+				writeBookedLogFile (*(int *) id, request, seatsBooked);
 			}
-			pthread_mutex_lock(&mut);
-			DELAY();
-			pthread_mutex_unlock(&mut);
+
 
 		}
 
 	}
+
 
 	sprintf (message, "%d-CLOSED", *(int *) id);
 	writeToLogFile (message);
