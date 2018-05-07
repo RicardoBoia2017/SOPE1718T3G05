@@ -151,6 +151,73 @@ void makeRequestsFifo()
 	    }
 }
 
+//calculates length from int
+int numDigits (int number)
+{
+	int res = 0;
+
+	while (number > 10)
+	{
+		number /= 10;
+		res++;
+	}
+
+	res ++;
+	return res;
+}
+
+//Writes in log file when request is rejected
+void writeRejectedLogFile (int threadId, Request *request, int rejectionMotive)
+{
+	char message [200];
+
+	//threadId width = 2
+	if (threadId < 10)
+		sprintf (message, "0%d-", threadId);
+	else
+		sprintf (message, "%d-", threadId);
+
+	//client Id width = 5
+	char clientIdString [5];
+	int clientIdLength = numDigits (request->clientId);
+
+	if (clientIdLength == 5)
+	{
+		sprintf (clientIdString, "%d-", request->clientId);
+		strcat (message, clientIdString);
+	}
+	else
+	{
+		while (clientIdLength < 5)
+		{
+			strcat (clientIdString, "0");
+			clientIdLength++;
+		}
+
+		char clientId [4];
+		sprintf (clientId, "%d", request->clientId);
+
+		strcat(clientIdString, clientId);
+		strcat(message, clientIdString);
+	}
+
+	//number of seats width = 2
+	char nSeatsString [2];
+
+	if (request->nSeats < 10)
+	{
+		sprintf (nSeatsString, "-0%d", request->nSeats);
+		strcat (message, nSeatsString);
+	}
+	else
+	{
+		sprintf (nSeatsString, "-%d", request->nSeats);
+		strcat (message, nSeatsString);
+	}
+
+	printf ("%s\n", message);
+}
+
 //Counts number of favorite seats in a request
 int countFavoriteSeats (Request * request)
 {
@@ -249,6 +316,7 @@ void * ticket_office (void * id)
 
 				write (answerFd, answer, sizeof(answer));
 
+				writeRejectedLogFile (*(int *) id, request, returnValue);
 				continue;
 			}
 
