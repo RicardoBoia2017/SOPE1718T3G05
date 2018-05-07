@@ -203,27 +203,27 @@ char * getErrorMsg (int code)
 	switch (code)
 	{
 	case -1:
-		return " - MAX";
+		return "- MAX";
 		break;
 
 	case -2:
-		return " - NST";
+		return "- NST";
 		break;
 
 	case -3:
-		return " - IID";
+		return "- IID";
 		break;
 
 	case -4:
-		return " - ERR";
+		return "- ERR";
 		break;
 
 	case -5:
-		return " - NAV";
+		return "- NAV";
 		break;
 
 	case -6:
-		return " - FUL";
+		return "- FUL";
 		break;
 	}
 
@@ -479,7 +479,8 @@ void * ticket_office (void * id)
 		    	perror ("Error fifo");
 		    	exit (6);
 		    }
-
+ 
+		    sleep (5);
 		    //checks conditions
 			int returnValue = checkRequest (request);
 
