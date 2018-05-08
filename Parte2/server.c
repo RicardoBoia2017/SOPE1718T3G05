@@ -474,6 +474,7 @@ void * ticket_office (void * id)
 
 		    answerFd = open(fifoName ,O_WRONLY);
 
+		    printf ("%s\n", fifoName);
 		    if (answerFd == -1)
 		    {
 		    	perror ("Error");
