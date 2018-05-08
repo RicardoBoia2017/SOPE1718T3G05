@@ -476,7 +476,7 @@ void * ticket_office (void * id)
 
 		    if (answerFd == -1)
 		    {
-		    	perror ("Error fifo");
+		    	perror ("Error");
 		    	exit (6);
 		    }
 
@@ -508,7 +508,6 @@ void * ticket_office (void * id)
 			int booked = 1; //to be used as boolean. Used to know if all seats were booked or not
 
 			pthread_mutex_lock(&mut);
-
 
 			while (numberSeatsBooked < request->nSeats) //while the number of seats booked isn't the required by the client
 			{
@@ -546,9 +545,10 @@ void * ticket_office (void * id)
 
 			pthread_mutex_unlock(&mut);
 
+			//sends number of seats and ids to cliente
 			if (booked)
 			{
-				char * answer = malloc (200);
+				char answer [600];
 
 				sprintf (answer, "%d", request->nSeats);
 
@@ -561,8 +561,7 @@ void * ticket_office (void * id)
 					strcat (answer, seat);
 				}
 
-				printf ("%s\n", answer);
-				write (answerFd, answer, sizeof(answer));
+				write (answerFd, answer, strlen(answer));
 				writeBookedLogFile (*(int *) id, request, seatsBooked);
 			}
 

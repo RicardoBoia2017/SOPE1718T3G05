@@ -42,7 +42,7 @@ void makeAnswerFifo()
 {
 	sprintf (answerFifoName, "ans%d", getpid());
 
-	if (mkfifo(answerFifoName, 0660) == -1) //creates fifo 'requests'
+	if (mkfifo(answerFifoName, 0777) == -1) //creates fifo 'requests'
 	{
 		perror("ERROR");
 		exit(2);
@@ -106,12 +106,11 @@ int main (int argc, char *argv[])
 		exit (3);
 	}
 
-    char * answer = malloc(200);
+    char answer [800];
 
-    printf ("%s, %d\n", answer, strlen(answer));
 	while (diff < openTime)
 	{
-        read (answerFd, answer, 200);
+        read (answerFd, answer, sizeof(answer));
 
         if (strlen(answer) != 0)
         	break;
@@ -123,6 +122,7 @@ int main (int argc, char *argv[])
    printf ("%s, %d\n", answer, strlen(answer));
    printf ("OUT\n");
 
+   close (answerFd);
    remove (answerFifoName);
    exit (0);
 }
