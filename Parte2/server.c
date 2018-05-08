@@ -479,7 +479,7 @@ void * ticket_office (void * id)
 		    	perror ("Error fifo");
 		    	exit (6);
 		    }
- 
+
 		    sleep (5);
 		    //checks conditions
 			int returnValue = checkRequest (request);
@@ -561,6 +561,7 @@ void * ticket_office (void * id)
 					strcat (answer, seat);
 				}
 
+				printf ("%s\n", answer);
 				write (answerFd, answer, sizeof(answer));
 				writeBookedLogFile (*(int *) id, request, seatsBooked);
 			}
