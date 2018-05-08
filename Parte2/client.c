@@ -91,21 +91,14 @@ int main (int argc, char *argv[])
 
 	gettimeofday(&startTime,NULL);
 
+	write (requestsFd, request, sizeof (Request));
+
 	gettimeofday(&currentTime,NULL);
 
 	double diff = (double) (currentTime.tv_usec - startTime.tv_usec) / 1000000 + (double) (currentTime.tv_sec - startTime.tv_sec);
 
-	while (diff < openTime)
-	{
-		gettimeofday(&currentTime,NULL);
-		diff = (double) (currentTime.tv_usec - startTime.tv_usec) / 1000000 + (double) (currentTime.tv_sec - startTime.tv_sec);
-	}
-
-   write (requestsFd, request, sizeof (Request));
-
-
    	int answerFd;
-	answerFd = open(answerFifoName ,O_RDONLY);
+	answerFd = open(answerFifoName ,O_RDONLY|O_NONBLOCK);
 
 	if (answerFd == -1)
 	{
@@ -113,11 +106,23 @@ int main (int argc, char *argv[])
 		exit (3);
 	}
 
-   char answer [50];
-   read (answerFd, answer, 50);
+    char * answer = malloc(200);
 
-   printf ("%s\n", answer);
+    printf ("%s, %d\n", answer, strlen(answer));
+	while (diff < openTime)
+	{
+        read (answerFd, answer, 200);
 
-   remove (fifoName);
+        if (strlen(answer) != 0)
+        	break;
+
+		gettimeofday(&currentTime,NULL);
+		diff = (double) (currentTime.tv_usec - startTime.tv_usec) / 1000000 + (double) (currentTime.tv_sec - startTime.tv_sec);
+	}
+
+   printf ("%s, %d\n", answer, strlen(answer));
+   printf ("OUT\n");
+
+   remove (answerFifoName);
    exit (0);
 }
