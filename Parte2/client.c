@@ -98,7 +98,7 @@ int main (int argc, char *argv[])
 	double diff = (double) (currentTime.tv_usec - startTime.tv_usec) / 1000000 + (double) (currentTime.tv_sec - startTime.tv_sec);
 
    	int answerFd;
-	answerFd = open(answerFifoName ,O_RDONLY);
+	answerFd = open(answerFifoName ,O_RDONLY|O_NONBLOCK);
 
 	if (answerFd == -1)
 	{
@@ -106,19 +106,21 @@ int main (int argc, char *argv[])
 		exit (3);
 	}
 
-    char answer [50];
+    char * answer = malloc(200);
 
+    printf ("%s, %d\n", answer, strlen(answer));
 	while (diff < openTime)
 	{
-		printf ("Hello\n");
-        read (answerFd, answer, 50);
+        read (answerFd, answer, 200);
+
+        if (strlen(answer) != 0)
+        	break;
 
 		gettimeofday(&currentTime,NULL);
 		diff = (double) (currentTime.tv_usec - startTime.tv_usec) / 1000000 + (double) (currentTime.tv_sec - startTime.tv_sec);
 	}
 
-
-
+   printf ("%s, %d\n", answer, strlen(answer));
    printf ("OUT\n");
 
    remove (answerFifoName);
