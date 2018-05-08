@@ -7,9 +7,8 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 
-#define WIDTH_PID 5
-#define WIDTH_XXNN 5
-#define WIDTH_SEAT 4
+
+#include "Utilities.h"
 
 typedef struct
 {
@@ -21,37 +20,11 @@ typedef struct
 int requestsFd; // requests file descriptor
 char answerFifoName [8]; //answer file descriptor
 
-//Opens log file
-void openLogFile ()
-{
-
-}
-
-//Writes to log file
-void writeToLogFile (char* string)
-{
-}
-
-//calculates length from int
-int numDigits (int number)
-{
-	int res = 0;
-
-	while (number >= 10)
-	{
-		number /= 10;
-		res++;
-	}
-
-	res ++;
-
-	return res;
-}
-
 //makes fifo that waits for answer
 void makeAnswerFifo()
 {
 	sprintf (answerFifoName, "ans%d", getpid());
+
 	printf ("%s\n",answerFifoName);
 
 	if (mkfifo(answerFifoName, 0660) == -1) //creates fifo 'requests'
@@ -106,20 +79,6 @@ char * getErrorMsg (int code)
 	return " OK";
 }
 
-void writePid(FILE * file)
-{
-	int pidLength = numDigits (getpid());
-
-	if (pidLength < 5)
-	{
-		int i;
-		for (i = pidLength; i < WIDTH_PID; i++)
-			fprintf (file, "0");
-	}
-
-	fprintf (file, "%d ", getpid());
-}
-
 void registerRequest (char answer[800])
 {
 	FILE * logFilePointer; //pointer for the logs file
@@ -133,64 +92,52 @@ void registerRequest (char answer[800])
 		exit(2);
 	}
 
+	if (strlen(answer) == 0)
+	{
+		writePid(logFilePointer);
+
+		fprintf (logFilePointer, " OUT\n");
+
+		return;
+	}
+
 	//if server returns an error (negative number)
 	if (strlen(answer) == 2)
 	{
 		//writes pid with WIDTH_PID
 		writePid(logFilePointer);
 
+		fprintf(logFilePointer," ");
+
 		int errCode = atoi(answer);
 		char * err = getErrorMsg (errCode);
 
 		fprintf (logFilePointer, "%s\n", err);
+
 		return;
 	}
 
-	//write the booked
+	//write the booked seats
 	int s = 1;
 	char * values = strtok(answer, " ");
 	int seatsBooked = atoi(values);
-	int seatsBookedLength = numDigits(seatsBooked);
 
-	printf ("%d\n", seatsBooked);
 	values = strtok (NULL, " ");
 
 	while (values != NULL)
 	{
-		int seatLength = numDigits (atoi(values));
-		int sLength = numDigits (s);
-		int i;
-
-		//writes with WIDTH_PID
+		//writes pid with WIDTH_PID
 		writePid(logFilePointer);
 
+		fprintf(logFilePointer," ");
+
 		//xx.nn ssss
-		//xx
-		if (sLength != (WIDTH_XXNN-1)/2)
-		{
-			for (i = sLength; i < (WIDTH_XXNN-1)/2; i++)
-				fprintf (logFilePointer, "0");
-		}
-
-		fprintf (logFilePointer, "%d.", s);
-
-		//ss
-		if (seatsBookedLength != (WIDTH_XXNN-1)/2)
-		{
-			for (i = seatsBookedLength; i < (WIDTH_XXNN-1)/2; i++)
-				fprintf (logFilePointer, "0");
-		}
-
-		fprintf (logFilePointer, "%d ", seatsBooked);
+		writeXXNN (logFilePointer, seatsBooked, s);
 
 		//ssss (seat id)
-		if (seatLength != WIDTH_SEAT )
-		{
-			for (i = seatLength; i < WIDTH_SEAT; i++)
-				fprintf (logFilePointer, "0");
-		}
+		writeSeat (logFilePointer, atoi(values));
 
-		fprintf (logFilePointer, "%d\n", atoi(values) );
+		fprintf(logFilePointer, "\n");
 
 		values = strtok (NULL, " ");
 		s ++;
@@ -198,9 +145,37 @@ void registerRequest (char answer[800])
 
 }
 
+void writeInCbook (char answer [800])
+{
+	FILE * logFilePointer; //pointer for the logs file
+
+	//opens text file
+	logFilePointer = fopen ("cbook.txt", "a"); //O_WRONLY|O_CREAT|O_APPEND
+
+	if (logFilePointer == 0)
+	{
+		printf ("There was an error opening the register file.\n");
+		exit(2);
+	}
+
+	char * values = strtok(answer, " ");
+
+	values = strtok (NULL, " ");
+
+	while (values != NULL)
+	{
+		writeSeat (logFilePointer, atoi(values));
+
+		fprintf(logFilePointer, "\n");
+
+		values = strtok (NULL, " ");
+	}
+}
+
 int main (int argc, char *argv[])
 {
 	double openTime;
+    char answer [800] = {0};
 	struct timeval startTime, currentTime;
 	Request *request = malloc(sizeof(Request));;
 
@@ -242,23 +217,30 @@ int main (int argc, char *argv[])
 		exit (3);
 	}
 
-    char answer [800];
 
 	while (diff < openTime)
 	{
         read (answerFd, answer, sizeof(answer));
 
         if (strlen(answer) != 0)
+        {
         	break;
+        }
 
 		gettimeofday(&currentTime,NULL);
 		diff = (double) (currentTime.tv_usec - startTime.tv_usec) / 1000000 + (double) (currentTime.tv_sec - startTime.tv_sec);
 	}
 
-   registerRequest(answer);
+   char copy[800];
+   strcpy (copy, answer);
+
+   printf ("B4 cbook\n");
+   writeInCbook(copy); //cbook
+   printf ("B4 clog\n");
+   registerRequest(answer);  //clog
 
 
    close (answerFd);
-   remove (answerFifoName);
+//   remove (answerFifoName);
    exit (0);
 }

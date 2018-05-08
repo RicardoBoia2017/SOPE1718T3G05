@@ -8,9 +8,10 @@
 #include <sys/stat.h>
 #include <sys/time.h> //gettimeofday
 
+#include "Utilities.h"
+
 #define MAX_ROOM_SEATS 9999
 #define MAX_CLI_SEATS 99
-#define WIDTH_PID
 #define DELAY() sleep(1) //delay 2 seconds
 
 pthread_mutex_t mut = PTHREAD_MUTEX_INITIALIZER;  // mutex for critical section
@@ -203,212 +204,97 @@ char * getErrorMsg (int code)
 	switch (code)
 	{
 	case -1:
-		return "- MAX";
+		return "MAX";
 		break;
 
 	case -2:
-		return "- NST";
+		return "NST";
 		break;
 
 	case -3:
-		return "- IID";
+		return "IID";
 		break;
 
 	case -4:
-		return "- ERR";
+		return "ERR";
 		break;
 
 	case -5:
-		return "- NAV";
+		return "NAV";
 		break;
 
 	case -6:
-		return "- FUL";
+		return "FUL";
 		break;
 	}
 
 	return " OK";
 }
 
+void writeRequestInformation (int threadId, Request *request)
+{
+	//threadId width = 2
+	if (threadId < 10)
+		fprintf (logFilePointer, "0");
+
+	fprintf (logFilePointer, "%d-", threadId);
+
+	//client Id width = 5
+	writePid (logFilePointer);
+
+	//number of seats width = 2
+	fprintf (logFilePointer, "-");
+
+	if (request->nSeats < 10)
+		fprintf (logFilePointer, "0");
+
+	fprintf (logFilePointer, "%d: ", request->nSeats);
+
+	//favorite seats width = 4
+	int favoriteSeatsSize = countFavoriteSeats (request);
+	int s = 0;
+
+	while (s < favoriteSeatsSize)
+	{
+		writeSeat(logFilePointer, request->favoriteSeats[s]);
+
+		fprintf (logFilePointer, " ");
+
+		s++;
+	}
+
+	fprintf (logFilePointer, "- ");
+}
+
 //Writes in log file when request is rejected
 void writeRejectedLogFile (int threadId, Request *request, int rejectionMotive)
 {
-	char message [400];
+	writeRequestInformation (threadId, request);
 
-	//threadId width = 2
-	if (threadId < 10)
-		sprintf (message, "0%d-", threadId);
-	else
-		sprintf (message, "%d-", threadId);
+	//writes type of error
+	char * errorMsg = getErrorMsg (rejectionMotive);
 
-	//client Id width = 5
-	char clientIdString [5];
-	int clientIdLength = numDigits (request->clientId);
+	fprintf (logFilePointer, "%s\n", errorMsg);
 
-	if (clientIdLength == 5)
-		sprintf (clientIdString, "%d", request->clientId);
-
-	else
-	{
-		sprintf (clientIdString, "0");
-		while (clientIdLength < 4)
-		{
-			strcat (clientIdString, "0");
-			clientIdLength++;
-		}
-
-		char clientId [4];
-		sprintf (clientId, "%d", request->clientId);
-
-		strcat(clientIdString, clientId);
-	}
-
-	strcat(message, clientIdString);
-
-	//number of seats width = 2
-	char nSeatsString [2];
-
-	if (request->nSeats < 10)
-		sprintf (nSeatsString, "-0%d: ", request->nSeats);
-
-	else
-		sprintf (nSeatsString, "-%d: ", request->nSeats);
-
-
-	strcat (message, nSeatsString);
-
-	//favorite seats width = 4
-	int favoriteSeatsSize = countFavoriteSeats (request);
-	int s = 0;
-
-	while (s < favoriteSeatsSize)
-	{
-		int seatLength = numDigits (request->favoriteSeats[s]);
-		char favoriteSeatString [4];
-
-		sprintf (favoriteSeatString, "%d ", request->favoriteSeats[s]);
-
-		if(seatLength < 4)
-		{
-			int i;
-			for (i = seatLength; i < 4; i++)
-			{
-				strcat (message, "0");
-			}
-
-		}
-
-		strcat (message, favoriteSeatString);
-		s++;
-	}
-
-	char * errorMsg = malloc (3);
-	errorMsg = getErrorMsg (rejectionMotive);
-
-	strcat (message, errorMsg);
-
-	writeToLogFile (message);
 }
 
 //Writes in log file when request is booked
-void writeBookedLogFile (int threadId, Request * request, int seatsBooked[])
+void writeBookedLogFile (int threadId, Request * request, int bookedSeats[])
 {
-	char message [400];
+	writeRequestInformation(threadId, request);
 
-	//threadId width = 2
-	if (threadId < 10)
-		sprintf (message, "0%d-", threadId);
-	else
-		sprintf (message, "%d-", threadId);
-
-	//client Id width = 5
-	char clientIdString [5];
-	int clientIdLength = numDigits (request->clientId);
-
-	if (clientIdLength == 5)
-		sprintf (clientIdString, "%d", request->clientId);
-
-
-	else
-	{
-		sprintf (clientIdString, "0");
-		while (clientIdLength < 4)
-		{
-			strcat (clientIdString, "0");
-			clientIdLength++;
-		}
-		char clientId [4];
-
-		sprintf (clientId, "%d", request->clientId);
-
-		strcat(clientIdString, clientId);
-	}
-
-	strcat(message, clientIdString);
-
-	//number of seats width = 2
-	char nSeatsString [2];
-
-	if (request->nSeats < 10)
-		sprintf (nSeatsString, "-0%d: ", request->nSeats);
-
-	else
-		sprintf (nSeatsString, "-%d: ", request->nSeats);
-
-
-	strcat (message, nSeatsString);
-
-	//favorite seats width = 4
-	int favoriteSeatsSize = countFavoriteSeats (request);
-	int s = 0;
-
-	while (s < favoriteSeatsSize)
-	{
-		int seatLength = numDigits (request->favoriteSeats[s]);
-		char favoriteSeatString [4];
-
-		sprintf (favoriteSeatString, "%d ", request->favoriteSeats[s]);
-
-		if(seatLength < 4)
-		{
-			int i;
-			for (i = seatLength; i < 4; i++)
-			{
-				strcat (message, "0");
-			}
-
-		}
-
-		strcat (message, favoriteSeatString);
-		s++;
-	}
-
-	strcat (message, "- ");
 	//booked seats width = 4
-	s = 0;
+	int s = 0;
 	while (s < request->nSeats)
 	{
-		int seatLength = numDigits (seatsBooked [s]);
-		char bookedSeatString [4];
+		writeSeat(logFilePointer, bookedSeats[s]);
 
-		sprintf (bookedSeatString, "%d ", request->favoriteSeats[s]);
+		fprintf (logFilePointer, " ");
 
-		if(seatLength < 4)
-		{
-			int i;
-			for (i = seatLength; i < 4; i++)
-			{
-				strcat (message, "0");
-			}
-
-		}
-
-		strcat (message, bookedSeatString);
 		s++;
 	}
 
-	writeToLogFile (message);
-
+	fprintf (logFilePointer, "\n");
 }
 
 //Check if a request is valid.
@@ -474,14 +360,15 @@ void * ticket_office (void * id)
 
 		    answerFd = open(fifoName ,O_WRONLY);
 
-		    printf ("%s\n", fifoName);
+		    printf ("%s", fifoName);
+		    printf ("dd\n");
+
 		    if (answerFd == -1)
 		    {
 		    	perror ("Error");
 		    	exit (6);
 		    }
 
-		    sleep (5);
 		    //checks conditions
 			int returnValue = checkRequest (request);
 
@@ -616,9 +503,9 @@ int main (int argc, char *argv[])
 
 	gettimeofday(&startTime,NULL);
 
-
 	getRequests (openTime);
 
+	fprintf (logFilePointer,"\n");
 	close (requestsFd);
 	remove ("requests"); // REMOVE REMOVE REMOVE
 	exit (0);
