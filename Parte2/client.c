@@ -12,6 +12,7 @@
 #define WIDTH_PID 5
 #define WIDTH_SEAT 4
 #define WIDTH_XXNN 5
+#define SPACE 32
 
 typedef struct
 {
@@ -265,14 +266,19 @@ int main (int argc, char *argv[])
 	request->clientId = getpid();
 	request->nSeats = atoi(argv[2]);
 
-    int i;
-    for (i = 0; i < argc - 3; i++)
-    	request->wantedSeats [i] = atoi (argv [i+3]);
 
+
+	int s = 0;
+	char * seat = strtok(argv[3], " ");
+
+	while (seat != NULL)
+	{
+		request->wantedSeats[s] = atoi(seat);
+		seat = strtok (NULL, " ");
+		s++;
+	}
 
 	gettimeofday(&startTime,NULL);
-
-	printf ("%d\n", request->clientId);
 	write (requestsFd, request, sizeof (Request));
 
 	gettimeofday(&currentTime,NULL);

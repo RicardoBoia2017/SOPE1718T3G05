@@ -35,8 +35,8 @@ typedef struct
 
 Seat seats [MAX_ROOM_SEATS - 1]; //seats
 int seatsBooked = 0; //number of seats booked for the event
-Request * requests [200]; //stores the request that haven't been picked up by thread
-int requestsSize = 0; //size of requests array
+Request * nextRequest; //stores the request that haven't been picked up by thread
+int requestInHold = 0; //size of requests array
 
 int stop = 0; //controls tickets offices open time
 int numRoomSeats = 0; //available seats to the event
@@ -79,12 +79,12 @@ void writeToLogFile (char* string)
 }
 
 //Called when a request is collected. Decrements the position of the remaining requests
-void shiftArray ()
-{
-	int i;
-	for (i = 1; i < requestsSize; ++i)
-	  requests[i-1] = requests[i];
-}
+//void shiftArray ()
+//{
+//	int i;
+//	for (i = 1; i < requestsSize; ++i)
+//	  requests[i-1] = requests[i];
+//}
 
 //Reads the requests from clients during openTime.
 void getRequests (double openTime)
@@ -103,8 +103,8 @@ void getRequests (double openTime)
 
 		if (request->clientId != 0) //if clientId is 0, then there is no request to be read, otherwise there is.
 		{
-			requests [requestsSize] = request;
-			requestsSize++;
+			nextRequest = request;
+			requestInHold = 1;
 		}
 
 		gettimeofday(&currentTime,NULL);
@@ -403,16 +403,14 @@ void * ticket_office (void * id)
   	{
 		requestToBook = 0;
 
-//		printf ("Hello\n");
 		pthread_mutex_lock(&mut);
 
-		if(requestsSize > 0) //if true, then there is a request to be collected
+		if(requestInHold) //if true, then there is a request to be collected
 		{
 			printf ("%d Getting request\n", * (int *) id);
 			requestToBook = 1;
-			request = requests [0];
-			requestsSize--;
-			shiftArray();
+			request = nextRequest;
+			requestInHold = 0;
 		}
 
 		pthread_mutex_unlock(&mut);
@@ -435,7 +433,6 @@ void * ticket_office (void * id)
 		    //checks conditions
 			int returnValue = checkRequest (request);
 
-			printf ("%d\n", request->clientId);
 
 			if (returnValue != 0)
 			{
@@ -473,7 +470,7 @@ void * ticket_office (void * id)
 					for (i = 0; i < numberSeatsBooked; i++)
 					{
 						freeSeat (seats, seatsBooked [i]);
-						DELAY();
+//						DELAY();
 					}
 					writeRejectedLogFile (*(int *) id, request, -5);
 					break;
@@ -481,9 +478,9 @@ void * ticket_office (void * id)
 
 				if (isSeatFree(seats, request->favoriteSeats[ws]))
 				{
-					DELAY();
+	//				DELAY();
 					bookSeat (seats, request->favoriteSeats[ws], request->clientId);
-					DELAY();
+	//				DELAY();
 					seatsBooked [sb] = request->favoriteSeats[ws];
 					sb++;
 					numberSeatsBooked++;
@@ -518,13 +515,18 @@ void * ticket_office (void * id)
 
 				if (write (answerFd, answer, strlen(answer)) < 0) //client timed out
 				{
+					pthread_mutex_lock(&mut);
+
 					int i;
 					for (i = 0; i < numberSeatsBooked; i++)
 					{
 						freeSeat (seats, seatsBooked [i]);
-						DELAY();
+//						DELAY();
 					}
+
+					pthread_mutex_unlock(&mut);
 					continue;
+
 				}
 				pthread_mutex_lock(&mut);
 
