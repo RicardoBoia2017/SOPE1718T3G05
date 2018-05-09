@@ -8,11 +8,13 @@
 #include <sys/stat.h>
 #include <sys/time.h> //gettimeofday
 
-#include "Utilities.h"
 
 #define MAX_ROOM_SEATS 9999
 #define MAX_CLI_SEATS 99
 #define DELAY() sleep(1) //delay 2 seconds
+
+#define WIDTH_PID 5
+#define WIDTH_SEAT 4
 
 pthread_mutex_t mut = PTHREAD_MUTEX_INITIALIZER;  // mutex for critical section
 
@@ -58,7 +60,7 @@ void openLogFile ()
 //Writes to log file
 void writeToLogFile (char* string)
 {
-	fprintf (logFilePointer, "%s\n",string);
+	fprintf (logFilePointer, "%s",string);
 }
 
 //Called when a request is collected. Decrements the position of the remaining requests
@@ -154,13 +156,13 @@ void makeRequestsFifo()
 }
 
 //calculates length from int
-int numDigits (int number)
+int nDigits (int number)
 {
 	int res = 0;
 
 	if (number > 0)
 	{
-		while (number > 10)
+		while (number >= 10)
 		{
 			number /= 10;
 			res++;
@@ -169,7 +171,7 @@ int numDigits (int number)
 
 	else
 	{
-		while (number < -10)
+		while (number <= -10)
 		{
 			number /= 10;
 			res++;
@@ -231,6 +233,40 @@ char * getErrorMsg (int code)
 	return " OK";
 }
 
+void writeClientId (FILE * file, int clientId)
+{
+	int pidLength = nDigits (getpid());
+
+	if (pidLength < 5)
+	{
+		int i;
+		for (i = pidLength; i < WIDTH_PID; i++)
+			fprintf (file, "0");
+	}
+
+	fprintf (file, "%d", clientId);
+}
+
+void writeSeat (FILE * file, int seatId)
+{
+	int seatLength = nDigits (seatId);
+
+	if (seatId < 0)
+		fprintf (file, "-");
+
+	if (seatLength != WIDTH_SEAT )
+	{
+		int i;
+		for (i = seatLength; i < WIDTH_SEAT; i++)
+			fprintf (file, "0");
+	}
+
+	if (seatId < 0)
+		fprintf (file, "%d", seatId/-1);
+	else
+		fprintf (file, "%d", seatId);
+
+}
 void writeRequestInformation (int threadId, Request *request)
 {
 	//threadId width = 2
@@ -240,7 +276,7 @@ void writeRequestInformation (int threadId, Request *request)
 	fprintf (logFilePointer, "%d-", threadId);
 
 	//client Id width = 5
-	writePid (logFilePointer);
+	writeClientId (logFilePointer, request->clientId);
 
 	//number of seats width = 2
 	fprintf (logFilePointer, "-");
@@ -293,8 +329,32 @@ void writeBookedLogFile (int threadId, Request * request, int bookedSeats[])
 
 		s++;
 	}
-
 	fprintf (logFilePointer, "\n");
+
+}
+
+void writeInSbook (int seatsBooked[], int numberSeatsBooked)
+{
+	FILE * bookFilePointer; //pointer for the logs file
+
+	//opens text file
+	bookFilePointer = fopen ("sbook.txt", "a"); //O_WRONLY|O_CREAT|O_APPEND
+
+	if (bookFilePointer == 0)
+	{
+		printf ("There was an error opening the register file.\n");
+		exit(7);
+	}
+
+	int s = 0;
+
+	while (s < numberSeatsBooked)
+	{
+		writeSeat (bookFilePointer, seatsBooked[s]);
+
+		fprintf (bookFilePointer, "\n");
+		s++;
+	}
 }
 
 //Check if a request is valid.
@@ -327,11 +387,11 @@ int checkRequest (Request * request)
 //Thread to book seats
 void * ticket_office (void * id)
 {
-	char message[9];
+	char message[11];
 	Request * request = malloc (sizeof (Request)); //where the requests are gonna be stored
 	int requestToBook = 0; //to be used as boolean
 
-	sprintf (message, "%d-OPEN", *(int *) id);
+	sprintf (message, "%d-OPEN\n", *(int *) id);
 	writeToLogFile (message);
 
 	while (!stop)
@@ -360,9 +420,6 @@ void * ticket_office (void * id)
 
 		    answerFd = open(fifoName ,O_WRONLY);
 
-		    printf ("%s", fifoName);
-		    printf ("dd\n");
-
 		    if (answerFd == -1)
 		    {
 		    	perror ("Error");
@@ -371,6 +428,8 @@ void * ticket_office (void * id)
 
 		    //checks conditions
 			int returnValue = checkRequest (request);
+
+			printf ("%d\n", request->clientId);
 
 			if (returnValue != 0)
 			{
@@ -383,6 +442,7 @@ void * ticket_office (void * id)
 				continue;
 			}
 
+			printf ("%d\n", request->clientId);
 
 			//tries to book the seats
 			int wantedSeatsCount = countFavoriteSeats(request); //number of seats on favorite seats
@@ -451,6 +511,7 @@ void * ticket_office (void * id)
 
 				write (answerFd, answer, strlen(answer));
 				writeBookedLogFile (*(int *) id, request, seatsBooked);
+				writeInSbook (seatsBooked, numberSeatsBooked);
 			}
 
 
@@ -459,7 +520,7 @@ void * ticket_office (void * id)
 	}
 
 
-	sprintf (message, "%d-CLOSED", *(int *) id);
+	sprintf (message, "%d-CLOSED\n", *(int *) id);
 	writeToLogFile (message);
 
 	free (request);
@@ -505,8 +566,12 @@ int main (int argc, char *argv[])
 
 	getRequests (openTime);
 
-	fprintf (logFilePointer,"\n");
+	for (t = 1; t <= nTicketsOffices; t++) {  //creates nTicketsOffices threads
+
+		pthread_join (tid[t-1], NULL);
+	}
+
 	close (requestsFd);
-	remove ("requests"); // REMOVE REMOVE REMOVE
+	remove ("requests");
 	exit (0);
 }

@@ -8,7 +8,10 @@
 #include <sys/time.h>
 
 
-#include "Utilities.h"
+
+#define WIDTH_PID 5
+#define WIDTH_SEAT 4
+#define WIDTH_XXNN 5
 
 typedef struct
 {
@@ -24,8 +27,6 @@ char answerFifoName [8]; //answer file descriptor
 void makeAnswerFifo()
 {
 	sprintf (answerFifoName, "ans%d", getpid());
-
-	printf ("%s\n",answerFifoName);
 
 	if (mkfifo(answerFifoName, 0660) == -1) //creates fifo 'requests'
 	{
@@ -45,6 +46,22 @@ void openRequestsFifo ()
     	perror ("Error");
     	exit (4);
     }
+}
+
+//calculates length from int
+int nDigits (int number)
+{
+	int res = 0;
+
+	while (number >= 10)
+	{
+		number /= 10;
+		res++;
+	}
+
+	res ++;
+
+	return res;
 }
 
 char * getErrorMsg (int code)
@@ -77,6 +94,59 @@ char * getErrorMsg (int code)
 	}
 
 	return " OK";
+}
+
+void writePid (FILE * file)
+{
+	int pidLength = nDigits (getpid());
+
+	if (pidLength < 5)
+	{
+		int i;
+		for (i = pidLength; i < WIDTH_PID; i++)
+			fprintf (file, "0");
+	}
+
+	fprintf (file, "%d", getpid());
+}
+
+void writeXXNN (FILE * file, int nBookedSeats, int seatPosition) //seat position in the booked seats array
+{
+	int nBookedSeatsLength = nDigits (nBookedSeats);
+	int seatPositionLength = nDigits (seatPosition);
+	int i;
+
+	//xx
+	if (seatPositionLength != (WIDTH_XXNN-1)/2)
+	{
+		for (i = seatPositionLength; i < (WIDTH_XXNN-1)/2; i++)
+			fprintf (file, "0");
+	}
+
+	fprintf (file, "%d.", seatPosition);
+
+	//ss
+	if (nBookedSeatsLength != (WIDTH_XXNN-1)/2)
+	{
+		for (i = nBookedSeatsLength; i < (WIDTH_XXNN-1)/2; i++)
+			fprintf (file, "0");
+	}
+
+	fprintf (file, "%d ", nBookedSeats);
+}
+
+void writeSeat (FILE * file, int seatId)
+{
+	int seatLength = nDigits (seatId);
+
+	if (seatLength != WIDTH_SEAT )
+	{
+		int i;
+		for (i = seatLength; i < WIDTH_SEAT; i++)
+			fprintf (file, "0");
+	}
+
+	fprintf (file, "%d", seatId);
 }
 
 void registerRequest (char answer[800])
@@ -147,12 +217,12 @@ void registerRequest (char answer[800])
 
 void writeInCbook (char answer [800])
 {
-	FILE * logFilePointer; //pointer for the logs file
+	FILE * bookFilePointer; //pointer for the logs file
 
 	//opens text file
-	logFilePointer = fopen ("cbook.txt", "a"); //O_WRONLY|O_CREAT|O_APPEND
+	bookFilePointer = fopen ("cbook.txt", "a"); //O_WRONLY|O_CREAT|O_APPEND
 
-	if (logFilePointer == 0)
+	if (bookFilePointer == 0)
 	{
 		printf ("There was an error opening the register file.\n");
 		exit(2);
@@ -164,9 +234,9 @@ void writeInCbook (char answer [800])
 
 	while (values != NULL)
 	{
-		writeSeat (logFilePointer, atoi(values));
+		writeSeat (bookFilePointer, atoi(values));
 
-		fprintf(logFilePointer, "\n");
+		fprintf(bookFilePointer, "\n");
 
 		values = strtok (NULL, " ");
 	}
@@ -202,6 +272,7 @@ int main (int argc, char *argv[])
 
 	gettimeofday(&startTime,NULL);
 
+	printf ("%d\n", request->clientId);
 	write (requestsFd, request, sizeof (Request));
 
 	gettimeofday(&currentTime,NULL);
@@ -234,13 +305,11 @@ int main (int argc, char *argv[])
    char copy[800];
    strcpy (copy, answer);
 
-   printf ("B4 cbook\n");
    writeInCbook(copy); //cbook
-   printf ("B4 clog\n");
    registerRequest(answer);  //clog
 
 
    close (answerFd);
-//   remove (answerFifoName);
+   remove (answerFifoName);
    exit (0);
 }
