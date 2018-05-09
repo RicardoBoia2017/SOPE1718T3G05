@@ -4,6 +4,7 @@
 #include <pthread.h>
 #include <fcntl.h>
 #include <string.h>
+#include <signal.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/time.h> //gettimeofday
@@ -41,6 +42,7 @@ int stop = 0; //controls tickets offices open time
 int numRoomSeats = 0; //available seats to the event
 
 FILE * logFilePointer; //pointer for the logs file
+FILE * bookFilePointer; //pointer for book file
 int requestsFd; // requests file descriptor
 struct timeval startTime; //start time of threads
 
@@ -55,6 +57,19 @@ void openLogFile ()
 		printf ("There was an error opening the register file.\n");
 		exit(2);
 	}
+}
+
+void openBookFile()
+{
+	//opens text file
+	bookFilePointer = fopen ("sbook.txt", "a"); //O_WRONLY|O_CREAT|O_APPEND
+
+	if (bookFilePointer == 0)
+	{
+		printf ("There was an error opening the register file.\n");
+		exit(7);
+	}
+
 }
 
 //Writes to log file
@@ -146,7 +161,7 @@ void makeRequestsFifo()
 			exit(3);
 		}
 
-	    requestsFd=open("requests" ,O_RDONLY);
+	    requestsFd=open("requests" ,O_RDONLY|O_NONBLOCK);
 
 	    if (requestsFd == -1)
 	    {
@@ -267,6 +282,7 @@ void writeSeat (FILE * file, int seatId)
 		fprintf (file, "%d", seatId);
 
 }
+
 void writeRequestInformation (int threadId, Request *request)
 {
 	//threadId width = 2
@@ -335,17 +351,6 @@ void writeBookedLogFile (int threadId, Request * request, int bookedSeats[])
 
 void writeInSbook (int seatsBooked[], int numberSeatsBooked)
 {
-	FILE * bookFilePointer; //pointer for the logs file
-
-	//opens text file
-	bookFilePointer = fopen ("sbook.txt", "a"); //O_WRONLY|O_CREAT|O_APPEND
-
-	if (bookFilePointer == 0)
-	{
-		printf ("There was an error opening the register file.\n");
-		exit(7);
-	}
-
 	int s = 0;
 
 	while (s < numberSeatsBooked)
@@ -398,10 +403,12 @@ void * ticket_office (void * id)
   	{
 		requestToBook = 0;
 
+		printf ("Hello\n");
 		pthread_mutex_lock(&mut);
 
 		if(requestsSize > 0) //if true, then there is a request to be collected
 		{
+			printf ("%d Getting request\n", * (int *) id);
 			requestToBook = 1;
 			request = requests [0];
 			requestsSize--;
@@ -420,10 +427,9 @@ void * ticket_office (void * id)
 
 		    answerFd = open(fifoName ,O_WRONLY);
 
-		    if (answerFd == -1)
+		    if (answerFd == -1) //client timed out
 		    {
-		    	perror ("Error");
-		    	exit (6);
+		    	continue;
 		    }
 
 		    //checks conditions
@@ -441,8 +447,6 @@ void * ticket_office (void * id)
 
 				continue;
 			}
-
-			printf ("%d\n", request->clientId);
 
 			//tries to book the seats
 			int wantedSeatsCount = countFavoriteSeats(request); //number of seats on favorite seats
@@ -509,7 +513,17 @@ void * ticket_office (void * id)
 					strcat (answer, seat);
 				}
 
-				write (answerFd, answer, strlen(answer));
+				if (write (answerFd, answer, strlen(answer)) < 0) //client timed out
+				{
+					int i;
+					for (i = 0; i < numberSeatsBooked; i++)
+					{
+						freeSeat (seats, seatsBooked [i]);
+						DELAY();
+					}
+					continue;
+				}
+
 				writeBookedLogFile (*(int *) id, request, seatsBooked);
 				writeInSbook (seatsBooked, numberSeatsBooked);
 			}
@@ -546,8 +560,11 @@ int main (int argc, char *argv[])
 	initializeSeats();
 
 	openLogFile();
+	openBookFile();
 
 	makeRequestsFifo ();
+
+	signal (SIGPIPE, SIG_IGN); //assures the programs runs correctly if a client times out
 
 	pthread_t tid[nTicketsOffices];
 	int t;
