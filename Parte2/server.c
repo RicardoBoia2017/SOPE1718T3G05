@@ -403,7 +403,7 @@ void * ticket_office (void * id)
   	{
 		requestToBook = 0;
 
-		printf ("Hello\n");
+//		printf ("Hello\n");
 		pthread_mutex_lock(&mut);
 
 		if(requestsSize > 0) //if true, then there is a request to be collected
@@ -459,10 +459,10 @@ void * ticket_office (void * id)
 
 			int booked = 1; //to be used as boolean. Used to know if all seats were booked or not
 
-			pthread_mutex_lock(&mut);
 
 			while (numberSeatsBooked < request->nSeats) //while the number of seats booked isn't the required by the client
 			{
+				pthread_mutex_lock(&mut);
 
 				if(wantedSeatsCount == 0) //condition #5 - if this happens, then server didn't book the required amount of seats
 				{
@@ -493,9 +493,12 @@ void * ticket_office (void * id)
 				wantedSeatsCount--;
 
 				ws++;
+				pthread_mutex_unlock(&mut);
+
+				DELAY();
+
 			}
 
-			pthread_mutex_unlock(&mut);
 
 			//sends number of seats and ids to cliente
 			if (booked)
@@ -523,9 +526,13 @@ void * ticket_office (void * id)
 					}
 					continue;
 				}
+				pthread_mutex_lock(&mut);
 
 				writeBookedLogFile (*(int *) id, request, seatsBooked);
 				writeInSbook (seatsBooked, numberSeatsBooked);
+
+				pthread_mutex_unlock(&mut);
+
 			}
 
 
