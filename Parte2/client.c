@@ -258,6 +258,7 @@ int main (int argc, char *argv[])
 
 	openTime = atof(argv[1]);
 
+	printf ("Client #%f\n", openTime);
 	makeAnswerFifo();
 
 	openRequestsFifo ();
@@ -306,11 +307,12 @@ int main (int argc, char *argv[])
 
 		gettimeofday(&currentTime,NULL);
 		diff = (double) (currentTime.tv_usec - startTime.tv_usec) / 1000000 + (double) (currentTime.tv_sec - startTime.tv_sec);
+		printf ("Waiting client %d\n", getpid());
+		sleep(1);
 	}
 
    char copy[800];
    strcpy (copy, answer);
-
    writeInCbook(copy); //cbook
    registerRequest(answer);  //clog
 

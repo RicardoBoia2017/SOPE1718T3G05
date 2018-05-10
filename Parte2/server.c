@@ -12,7 +12,7 @@
 
 #define MAX_ROOM_SEATS 9999
 #define MAX_CLI_SEATS 99
-#define DELAY() sleep(1) //delay 2 seconds
+#define DELAY() sleep(1) //delay 1 second
 
 #define WIDTH_PID 5
 #define WIDTH_SEAT 4
@@ -90,6 +90,7 @@ void writeToLogFile (char* string)
 void getRequests (double openTime)
 {
 	struct timeval currentTime;
+	char holder [100];
 
 	gettimeofday(&currentTime,NULL);
 
@@ -106,6 +107,7 @@ void getRequests (double openTime)
 			nextRequest = request;
 			requestInHold = 1;
 		}
+		sprintf (holder, "%f\n", diff);
 
 		gettimeofday(&currentTime,NULL);
 		diff = (double) (currentTime.tv_usec - startTime.tv_usec) / 1000000 + (double) (currentTime.tv_sec - startTime.tv_sec); //time the program has been running
@@ -439,87 +441,106 @@ void * ticket_office (void * id)
 				char * answer = malloc (2 * sizeof(char));
 				sprintf (answer , "%d", returnValue);
 
-				write (answerFd, answer, sizeof(answer));
+				if (write (answerFd, answer, strlen(answer)) < 0) //client timed out
+				{
+	//				printf ("WRITING TO REJECTED NOT WORLING\n");
+				}
+
 				writeRejectedLogFile (*(int *) id, request, returnValue);
 
 				continue;
 			}
 
 			//tries to book the seats
-			int wantedSeatsCount = countFavoriteSeats(request); //number of seats on favorite seats
+			int favoriteSeatsCount = countFavoriteSeats(request); //number of favorite seats
 
 			int numberSeatsBooked = 0; //number of seats booked in a certain moment
 			int seatsBooked [request->nSeats]; //id of seats booked
 
-			int sb = 0; //to parse through seatsBooked array
-			int ws = 0; //to parse  through favorite seats array
+			int fs = 0; //to parse  through favorite seats array
 
 			int booked = 1; //to be used as boolean. Used to know if all seats were booked or not
 
+			pthread_mutex_lock(&mut);
 
 			while (numberSeatsBooked < request->nSeats) //while the number of seats booked isn't the required by the client
 			{
-				pthread_mutex_lock(&mut);
 
-				if(wantedSeatsCount == 0) //condition #5 - if this happens, then server didn't book the required amount of seats
+				if(favoriteSeatsCount == 0) //condition #5 - if this happens, then server didn't book the required amount of seats
 				{
-					write (answerFd, "-5", 2*sizeof(char));
+					printf ("Cant book for client %d\n", request->clientId);
 					booked = 0;
-
-					int i;
-					for (i = 0; i < numberSeatsBooked; i++)
-					{
-						freeSeat (seats, seatsBooked [i]);
-//						DELAY();
-					}
-					writeRejectedLogFile (*(int *) id, request, -5);
+					pthread_mutex_unlock(&mut);
 					break;
 				}
 
-				if (isSeatFree(seats, request->favoriteSeats[ws]))
+				if (isSeatFree(seats, request->favoriteSeats[fs]))
 				{
 	//				DELAY();
-					bookSeat (seats, request->favoriteSeats[ws], request->clientId);
+					bookSeat (seats, request->favoriteSeats[fs], request->clientId);
+	//				printf ("Booking seat %d for client %d\n", request->favoriteSeats[fs], request->clientId);
 	//				DELAY();
-					seatsBooked [sb] = request->favoriteSeats[ws];
-					sb++;
+					seatsBooked [numberSeatsBooked] = request->favoriteSeats[fs];
 					numberSeatsBooked++;
 				}
 
+				favoriteSeatsCount--;
 
-				wantedSeatsCount--;
-
-				ws++;
+				fs++;
 				pthread_mutex_unlock(&mut);
 
 				DELAY();
+			}
+
+			printf ("Client %d\n", request->clientId);
+
+			if (!booked)
+			{
+				write (answerFd, "-5", 2*sizeof(char));
+
+				int i;
+
+				pthread_mutex_lock(&mut);
+
+				for (i = 0; i < numberSeatsBooked; i++)
+				{
+					freeSeat (seats, seatsBooked [i]);
+					printf ("Client %d\n freeing spot #%d", request->clientId, seatsBooked[i]);
+
+//						DELAY();
+				}
+				writeRejectedLogFile (*(int *) id, request, -5);
+
+				pthread_mutex_unlock(&mut);
 
 			}
 
 
 			//sends number of seats and ids to cliente
-			if (booked)
+			else
 			{
+//				write (answerFd, "Hello", 5);
 				char answer [600];
+				char seat [5];
 
 				sprintf (answer, "%d", request->nSeats);
 
 				int i;
 				for (i = 0; i < request->nSeats; i++)
 				{
-					char seat [5];
 					sprintf (seat, " %d", seatsBooked[i]);
 
 					strcat (answer, seat);
 				}
-
 				if (write (answerFd, answer, strlen(answer)) < 0) //client timed out
-				{
+				{				printf ("Couldn't write to client %d\n", request->clientId);
+
 					pthread_mutex_lock(&mut);
 
 					int i;
 					for (i = 0; i < numberSeatsBooked; i++)
 					{
+						printf ("Freeing spot\n");
 						freeSeat (seats, seatsBooked [i]);
 //						DELAY();
 					}
@@ -539,9 +560,7 @@ void * ticket_office (void * id)
 
 
 		}
-
 	}
-
 
 	sprintf (message, "%d-CLOSED\n", *(int *) id);
 	writeToLogFile (message);
