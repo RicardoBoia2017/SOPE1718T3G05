@@ -12,7 +12,7 @@
 
 #define MAX_ROOM_SEATS 9999
 #define MAX_CLI_SEATS 99
-#define DELAY() sleep(1) //delay 1 second
+#define DELAY() sleep(0) //delay 1 second
 
 #define WIDTH_PID 5
 #define WIDTH_SEAT 4
@@ -606,5 +606,6 @@ int main (int argc, char *argv[])
 	remove ("requests");
 	pthread_mutex_destroy(&mut);
 
+	writeToLogFile ("SERVER CLOSED");
 	exit (0);
 }
